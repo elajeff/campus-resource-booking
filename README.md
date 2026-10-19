@@ -16,7 +16,11 @@ The bundled cat artwork is used for the application and date-picker icons; the W
 
 `Resource` and `Reservation` represent the core data. `BookingService` validates booking, availability, and inventory operations. `BookingRepository` defines the storage operations and `SQLiteBookingRepository` implements them with JDBC. Reservation creation allocates its reference and inserts the booking in one transaction; SQLite constraints and triggers also reject invalid or overlapping rows at the database boundary. Resources are retired with an active flag, and cancelled bookings are marked cancelled, preserving their records and resource references.
 
-`BookingFrame` handles the Swing workflows and adapts service results to the resource and reservation table models. `DateTimePickerDialog` provides date and time selection. `Main` initializes the local database, seeds the sample catalog only when the database is empty, then starts the interface.
+`BookingFrame` handles the Swing workflows and adapts service results to the resource and reservation table models. `DateTimePickerDialog` provides date and time selection. The interface uses Swing layout managers and split panes so the catalog, booking form, and reservation table resize with the window.
+
+`Main` initializes the database and loads its data in a `SwingWorker`, then creates the interface on Swing's Event Dispatch Thread (EDT). Reservation, cancellation, inventory-add, and retirement writes also run in background workers; their completion handlers update Swing components on the EDT. The service protects its in-memory collections with short synchronized sections and does not hold that lock while JDBC is working.
+
+User-provided SQL values are bound with `PreparedStatement`. Reservation creation updates the reference sequence and inserts the booking in one transaction; a SQLite trigger rejects overlapping active reservations at the database boundary. The availability filter uses the application's loaded data for a quick response, while the database remains authoritative when a reservation is saved.
 
 ## Technology and setup
 

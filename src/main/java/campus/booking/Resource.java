@@ -6,7 +6,7 @@ public class Resource {
     private final ResourceType type;
     private final String location;
     private final int seatingCapacity;
-    private boolean active;
+    private volatile boolean active;
 
     public Resource(String id, String name, ResourceType type, String location, int seatingCapacity) {
         this(id, name, type, location, seatingCapacity, true);

@@ -3,28 +3,52 @@ package campus.booking;
 import java.awt.Color;
 import java.awt.Font;
 import java.nio.file.Path;
+import java.util.concurrent.ExecutionException;
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.UIManager;
 
 public class Main {
     public static void main(String[] args) {
         SwingUtilities.invokeLater(() -> {
             setLookAndFeel();
-            try {
-                Path databasePath = Path.of(System.getProperty("user.home"), ".resource-booking", "bookings.db");
-                SQLiteBookingRepository repository = new SQLiteBookingRepository(databasePath);
-                repository.initialize(SampleData.createResources());
-                BookingService service = new BookingService(
-                        repository.loadResources(), repository.loadReservations(), repository);
-                BookingFrame frame = new BookingFrame(service);
-                AppIcon.applyTo(frame);
-                frame.setVisible(true);
-            } catch (RuntimeException exception) {
-                javax.swing.JOptionPane.showMessageDialog(null,
-                        "The application could not open its local database.\n\n" + exception.getMessage(),
-                        "Could not start", javax.swing.JOptionPane.ERROR_MESSAGE);
-            }
+            new SwingWorker<BookingService, Void>() {
+                @Override
+                protected BookingService doInBackground() {
+                    Path databasePath = Path.of(System.getProperty("user.home"),
+                            ".resource-booking", "bookings.db");
+                    SQLiteBookingRepository repository = new SQLiteBookingRepository(databasePath);
+                    repository.initialize(SampleData.createResources());
+                    return new BookingService(repository.loadResources(), repository.loadReservations(), repository);
+                }
+
+                @Override
+                protected void done() {
+                    try {
+                        BookingService service = get();
+                        BookingFrame frame = new BookingFrame(service);
+                        AppIcon.applyTo(frame);
+                        frame.setVisible(true);
+                    } catch (InterruptedException exception) {
+                        Thread.currentThread().interrupt();
+                        showStartupError(exception);
+                    } catch (ExecutionException exception) {
+                        showStartupError(exception.getCause() == null ? exception : exception.getCause());
+                    } catch (RuntimeException exception) {
+                        showStartupError(exception);
+                    }
+                }
+            }.execute();
         });
+    }
+
+    private static void showStartupError(Throwable exception) {
+        String message = exception.getMessage();
+        if (message == null || message.isBlank()) message = "The database operation failed.";
+        JOptionPane.showMessageDialog(null,
+                "The application could not open its local database.\n\n" + message,
+                "Could not start", JOptionPane.ERROR_MESSAGE);
     }
 
     private static void setLookAndFeel() {

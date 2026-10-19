@@ -4,6 +4,11 @@ import java.time.LocalDateTime;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 public class BookingServiceTest {
     private static int testsRun;
@@ -25,6 +30,7 @@ public class BookingServiceTest {
         testSeatingCapacityOnlyAppliesToRooms();
         testSampleCatalogHasMultipleBookAndEquipmentCopies();
         testSQLitePersistenceAndConflictConstraint();
+        testConcurrentSQLiteBookingsCannotOverlap();
         System.out.println("Passed " + testsRun + " application checks.");
     }
 
@@ -225,6 +231,68 @@ public class BookingServiceTest {
             } catch (Exception exception) {
                 throw new AssertionError("Could not remove the temporary test database.", exception);
             }
+        }
+    }
+
+    private static void testConcurrentSQLiteBookingsCannotOverlap() {
+        Path folder = null;
+        Path database = null;
+        ExecutorService workers = Executors.newFixedThreadPool(2);
+        try {
+            folder = Files.createTempDirectory("booking-concurrency-test-");
+            database = folder.resolve("bookings.db");
+            List<Resource> catalog = List.of(
+                    new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30));
+            SQLiteBookingRepository firstRepository = new SQLiteBookingRepository(database);
+            firstRepository.initialize(catalog);
+            SQLiteBookingRepository secondRepository = new SQLiteBookingRepository(database);
+            BookingService firstService = new BookingService(
+                    firstRepository.loadResources(), firstRepository.loadReservations(), firstRepository);
+            BookingService secondService = new BookingService(
+                    secondRepository.loadResources(), secondRepository.loadReservations(), secondRepository);
+
+            CountDownLatch startTogether = new CountDownLatch(1);
+            LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
+            Future<Boolean> first = workers.submit(() -> attemptReservation(
+                    firstService, startTogether, "Alex", start));
+            Future<Boolean> second = workers.submit(() -> attemptReservation(
+                    secondService, startTogether, "Sam", start));
+            startTogether.countDown();
+
+            boolean firstSucceeded = first.get(10, TimeUnit.SECONDS);
+            boolean secondSucceeded = second.get(10, TimeUnit.SECONDS);
+            check(firstSucceeded != secondSucceeded,
+                    "only one simultaneous overlapping reservation can succeed");
+            check(firstRepository.loadReservations().size() == 1,
+                    "SQLite stores exactly one of the simultaneous overlapping reservations");
+        } catch (Exception exception) {
+            throw new AssertionError("Concurrent SQLite booking checks could not complete.", exception);
+        } finally {
+            workers.shutdownNow();
+            try {
+                if (database != null) {
+                    Files.deleteIfExists(Path.of(database + "-shm"));
+                    Files.deleteIfExists(Path.of(database + "-wal"));
+                    Files.deleteIfExists(database);
+                }
+                if (folder != null) Files.deleteIfExists(folder);
+            } catch (Exception exception) {
+                throw new AssertionError("Could not remove the temporary concurrency-test database.", exception);
+            }
+        }
+    }
+
+    private static boolean attemptReservation(BookingService service, CountDownLatch startTogether,
+                                              String borrower, LocalDateTime start) {
+        try {
+            startTogether.await();
+            service.reserve("C101", borrower, start, start.plusHours(1));
+            return true;
+        } catch (IllegalArgumentException expectedConflict) {
+            return false;
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new AssertionError("Concurrent reservation worker was interrupted.", exception);
         }
     }
 

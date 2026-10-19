@@ -3,6 +3,7 @@ package campus.booking;
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.Font;
 import java.awt.FontMetrics;
@@ -19,6 +20,9 @@ import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
+import java.util.concurrent.Callable;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
@@ -40,6 +44,7 @@ import javax.swing.RowFilter;
 import javax.swing.Scrollable;
 import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
 import javax.swing.table.TableRowSorter;
 
@@ -69,8 +74,11 @@ public class BookingFrame extends JFrame {
     private final JTextArea feedbackField = new JTextArea(" ");
     private final JButton cancelButton = new JButton("Cancel reservation");
     private final TableRowSorter<ResourceTableModel> resourceSorter;
+    private final JPanel busyGlassPane = new JPanel(new GridBagLayout());
+    private final JLabel busyMessage = new JLabel();
     private JSplitPane contentSplit;
     private JSplitPane workspaceSplit;
+    private boolean databaseTaskRunning;
     private String selectedResourceId;
     private LocalDateTime startDateTime = LocalDateTime.now().withSecond(0).withNano(0);
     private LocalDateTime endDateTime = startDateTime.plusHours(1);
@@ -85,6 +93,7 @@ public class BookingFrame extends JFrame {
         this.resourceSorter = new TableRowSorter<>(resourceModel);
 
         configureWindow();
+        configureBusyIndicator();
         configureTables();
         setLayout(new BorderLayout(0, 18));
         setBackground(BACKGROUND);
@@ -102,6 +111,22 @@ public class BookingFrame extends JFrame {
             workspaceSplit.setDividerLocation(0.72);
         });
         loadReservations();
+    }
+
+    private void configureBusyIndicator() {
+        busyGlassPane.setOpaque(false);
+        busyGlassPane.setFocusable(true);
+        busyGlassPane.setFocusTraversalKeysEnabled(false);
+        busyMessage.setFont(new Font("Segoe UI", Font.BOLD, 13));
+        busyMessage.setForeground(INK);
+        busyMessage.setOpaque(true);
+        busyMessage.setBackground(Color.WHITE);
+        busyMessage.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER), BorderFactory.createEmptyBorder(12, 18, 12, 18)));
+        busyGlassPane.add(busyMessage);
+        busyGlassPane.addMouseListener(new java.awt.event.MouseAdapter() { });
+        setGlassPane(busyGlassPane);
+        busyGlassPane.setVisible(false);
     }
 
     private void configureWindow() {
@@ -481,20 +506,34 @@ public class BookingFrame extends JFrame {
 
         closeButton.addActionListener(event -> dialog.dispose());
         addButton.addActionListener(event -> {
+            Resource resource;
             try {
                 ResourceType type = (ResourceType) typeField.getSelectedItem();
                 int seats = type.hasSeatingCapacity() ? Integer.parseInt(seatsField.getText().trim()) : 0;
-                Resource resource = new Resource(idField.getText(), nameField.getText(), type,
+                resource = new Resource(idField.getText(), nameField.getText(), type,
                         locationField.getText(), seats);
+            } catch (NumberFormatException exception) {
+                showDialogError(dialog, "Seat capacity must be a whole number.");
+                return;
+            } catch (IllegalArgumentException exception) {
+                showDialogError(dialog, exception.getMessage());
+                return;
+            }
+
+            Component[] dialogControls = {idField, nameField, typeField, locationField,
+                    seatsField, addButton, closeButton};
+            for (Component control : dialogControls) control.setEnabled(false);
+            runDatabaseTask("Adding resource…", () -> {
                 bookingService.addResource(resource);
+                return null;
+            }, ignored -> {
                 refreshResources();
                 showFeedback("Resource added to the catalog.", TEAL);
                 dialog.dispose();
-            } catch (NumberFormatException exception) {
-                showDialogError(dialog, "Seat capacity must be a whole number.");
-            } catch (IllegalArgumentException | BookingPersistenceException exception) {
-                showDialogError(dialog, exception.getMessage());
-            }
+            }, exception -> {
+                for (Component control : dialogControls) control.setEnabled(true);
+                showDialogError(dialog, messageOf(exception));
+            });
         });
         dialog.getRootPane().setDefaultButton(addButton);
         dialog.pack();
@@ -532,16 +571,16 @@ public class BookingFrame extends JFrame {
                 "Retire " + resource.getId() + " · " + resource.getName() + " from the active catalog?",
                 "Retire resource", JOptionPane.YES_NO_OPTION, JOptionPane.QUESTION_MESSAGE);
         if (choice != JOptionPane.YES_OPTION) return;
-        try {
+        runDatabaseTask("Retiring resource…", () -> {
             bookingService.retireResource(resource.getId());
+            return null;
+        }, ignored -> {
             clearSelectedResource();
             resourceTable.clearSelection();
             refreshResources();
             retireResourceButton.setEnabled(false);
             showFeedback("Resource retired from the active catalog.", TEAL);
-        } catch (IllegalArgumentException | BookingPersistenceException exception) {
-            showFeedback(exception.getMessage(), new Color(181, 77, 64));
-        }
+        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
     }
 
     private void adjustSelectedResourceField() {
@@ -598,16 +637,23 @@ public class BookingFrame extends JFrame {
     }
 
     private void createReservation() {
+        String resourceId;
         try {
-            Reservation reservation = bookingService.reserve(requireSelectedResource(), borrowerField.getText(),
-                    startDateTime, endDateTime);
-            borrowerField.setText("");
+            resourceId = requireSelectedResource();
+        } catch (IllegalArgumentException exception) {
+            showFeedback(exception.getMessage(), new Color(181, 77, 64));
+            return;
+        }
+        String borrowerName = borrowerField.getText();
+        LocalDateTime start = startDateTime;
+        LocalDateTime end = endDateTime;
+        runDatabaseTask("Saving reservation…", () ->
+                bookingService.reserve(resourceId, borrowerName, start, end), reservation -> {
+            if (borrowerField.getText().equals(borrowerName)) borrowerField.setText("");
             loadReservations();
             filterResources();
             showFeedback("Reservation created · " + reservation.getId(), TEAL);
-        } catch (IllegalArgumentException | BookingPersistenceException exception) {
-            showFeedback(exception.getMessage(), new Color(181, 77, 64));
-        }
+        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
     }
 
     private void cancelReservation() {
@@ -615,20 +661,58 @@ public class BookingFrame extends JFrame {
         if (selectedRow < 0) return;
         String reservationId = (String) reservationModel.getValueAt(
                 reservationTable.convertRowIndexToModel(selectedRow), 0);
-        try {
-            if (bookingService.cancel(reservationId)) {
+        runDatabaseTask("Cancelling reservation…", () -> bookingService.cancel(reservationId), cancelled -> {
+            if (cancelled) {
                 loadReservations();
                 filterResources();
                 showFeedback("Reservation " + reservationId + " cancelled.", TEAL);
+            } else {
+                showFeedback("That reservation is no longer active.", new Color(181, 77, 64));
             }
-        } catch (BookingPersistenceException exception) {
-            showFeedback(exception.getMessage(), new Color(181, 77, 64));
-        }
+        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
     }
 
     private void loadReservations() {
         reservationModel.setReservations(bookingService.getReservations());
         cancelButton.setEnabled(false);
+    }
+
+    private <T> void runDatabaseTask(String message, Callable<T> task,
+                                     Consumer<? super T> onSuccess,
+                                     Consumer<? super Throwable> onFailure) {
+        if (databaseTaskRunning) return;
+        databaseTaskRunning = true;
+        busyMessage.setText(message);
+        busyGlassPane.setVisible(true);
+        busyGlassPane.requestFocusInWindow();
+        setCursor(Cursor.getPredefinedCursor(Cursor.WAIT_CURSOR));
+
+        new SwingWorker<T, Void>() {
+            @Override
+            protected T doInBackground() throws Exception {
+                return task.call();
+            }
+
+            @Override
+            protected void done() {
+                databaseTaskRunning = false;
+                busyGlassPane.setVisible(false);
+                setCursor(Cursor.getDefaultCursor());
+                try {
+                    onSuccess.accept(get());
+                } catch (InterruptedException exception) {
+                    Thread.currentThread().interrupt();
+                    onFailure.accept(exception);
+                } catch (ExecutionException exception) {
+                    onFailure.accept(exception.getCause() == null ? exception : exception.getCause());
+                }
+            }
+        }.execute();
+    }
+
+    private static String messageOf(Throwable exception) {
+        String message = exception.getMessage();
+        return message == null || message.isBlank() ? "The database operation failed." : message;
     }
 
     private String requireSelectedResource() {
