@@ -26,7 +26,7 @@ goto end
 :failed
 echo.
 echo Tests failed. Review the error messages above.
+endlocal & exit /b 1
 :end
 echo.
-pause
-endlocal
+endlocal & exit /b 0

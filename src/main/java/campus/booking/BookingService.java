@@ -130,6 +130,9 @@ public class BookingService {
         if (start == null || end == null || !end.isAfter(start)) {
             throw new IllegalArgumentException("End time must be after start time.");
         }
+        if (!start.isAfter(LocalDateTime.now())) {
+            throw new IllegalArgumentException("Reservation start time must be in the future.");
+        }
 
         Resource resource;
         synchronized (stateLock) {
@@ -138,7 +141,7 @@ public class BookingService {
                 throw new IllegalArgumentException("That resource is already reserved for an overlapping time.");
             }
             if (repository == null) {
-                String reservationId = String.format("R%04d", nextReservationNumber++);
+                String reservationId = nextReservationIdLocked();
                 Reservation reservation = new Reservation(reservationId, resource.getId(), borrowerName, start, end);
                 reservations.add(reservation);
                 return reservation;
@@ -177,6 +180,22 @@ public class BookingService {
         }
         synchronized (stateLock) {
             return reservations.remove(reservation);
+        }
+    }
+
+    private String nextReservationIdLocked() {
+        while (true) {
+            String candidate = String.format("R%04d", nextReservationNumber++);
+            boolean alreadyUsed = false;
+            for (Reservation existing : reservations) {
+                if (existing.getId().equalsIgnoreCase(candidate)) {
+                    alreadyUsed = true;
+                    break;
+                }
+            }
+            if (!alreadyUsed) {
+                return candidate;
+            }
         }
     }
 

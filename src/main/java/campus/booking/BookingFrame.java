@@ -80,7 +80,7 @@ public class BookingFrame extends JFrame {
     private JSplitPane workspaceSplit;
     private boolean databaseTaskRunning;
     private String selectedResourceId;
-    private LocalDateTime startDateTime = LocalDateTime.now().withSecond(0).withNano(0);
+    private LocalDateTime startDateTime = LocalDateTime.now().plusMinutes(5).withSecond(0).withNano(0);
     private LocalDateTime endDateTime = startDateTime.plusHours(1);
 
     public BookingFrame(BookingService bookingService) {
@@ -726,6 +726,18 @@ public class BookingFrame extends JFrame {
         LocalDateTime current = start ? startDateTime : endDateTime;
         String title = start ? "Choose start date and time" : "Choose end date and time";
         DateTimePickerDialog.choose(this, title, current).ifPresent(value -> {
+            if (start && !value.isAfter(LocalDateTime.now())) {
+                showFeedback("Reservation start time must be in the future.", new Color(181, 77, 64));
+                return;
+            }
+            if (start && !endDateTime.isAfter(value)) {
+                showFeedback("Start time must be before the end time.", new Color(181, 77, 64));
+                return;
+            }
+            if (!start && !value.isAfter(startDateTime)) {
+                showFeedback("End time must be after the start time.", new Color(181, 77, 64));
+                return;
+            }
             if (start) {
                 startDateTime = value;
                 updateDateButton(startButton, value);

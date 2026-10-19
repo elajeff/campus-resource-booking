@@ -5,7 +5,7 @@ A Java desktop app for browsing a shared catalog and reserving rooms, books, and
 ## Features
 
 1. **Transactional SQLite persistence:** reservations are created in a transaction, while database constraints and triggers reject invalid or overlapping bookings.
-2. **Consistent booking conflict rules:** availability checks and reservations use the same interval rules; adjacent bookings are allowed.
+2. **Consistent booking conflict rules:** overlapping reservations are rejected, adjacent bookings are allowed, and new reservations must start in the future.
 3. **Time-based resource filtering and safe inventory edits:** find resources for a chosen slot, add inventory, and retire items only when they have no active bookings.
 4. **Practical desktop workflows:** browse and search the catalog, cancel bookings, and select dates and times from a click-based picker.
 
@@ -51,7 +51,7 @@ Run the included behavior and SQLite integration checks:
 .\test.bat
 ```
 
-The test harness covers normal reservations, invalid inputs, conflicts and interval boundaries, availability filtering, cancellation, adding and retiring inventory, SQLite persistence across repository reopen, and the database overlap constraint.
+The test harness covers normal reservations, past-time and invalid-input rejection, conflicts and interval boundaries, availability filtering, cancellation, adding and retiring inventory, SQLite persistence across repository reopen, unique in-memory references, and overlapping bookings attempted concurrently.
 
 ## Limitations
 

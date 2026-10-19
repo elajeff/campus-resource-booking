@@ -1,6 +1,8 @@
 package campus.booking;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -15,6 +17,8 @@ public class BookingServiceTest {
 
     public static void main(String[] args) {
         testReservationCanBeCreated();
+        testPastReservationStartIsRejected();
+        testInMemoryReservationIdsRemainUniqueWhenPreloaded();
         testOverlappingReservationIsRejected();
         testBackToBackReservationsAreAllowed();
         testDifferentResourcesCanBeReservedAtSameTime();
@@ -36,22 +40,39 @@ public class BookingServiceTest {
 
     private static void testReservationCanBeCreated() {
         BookingService service = serviceWithOneRoom();
-        Reservation reservation = service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
+        Reservation reservation = service.reserve("C101", "Alex", time("10:00"), time("11:00"));
         check("R0001".equals(reservation.getId()), "first reservation gets a reference");
         check(service.getReservations().size() == 1, "reservation is stored");
     }
 
+    private static void testPastReservationStartIsRejected() {
+        BookingService service = serviceWithOneRoom();
+        LocalDateTime start = LocalDateTime.now().minusDays(1);
+        expectFailure(() -> service.reserve("C101", "Alex", start, start.plusHours(1)));
+        check(service.getReservations().isEmpty(), "a past reservation is not stored");
+    }
+
+    private static void testInMemoryReservationIdsRemainUniqueWhenPreloaded() {
+        Resource room = new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30);
+        LocalDateTime start = LocalDate.now().plusDays(7).atTime(10, 0);
+        Reservation existing = new Reservation("R0001", "C101", "Alex", start, start.plusHours(1));
+        BookingService service = new BookingService(List.of(room), List.of(existing), null);
+        Reservation created = service.reserve("C101", "Sam", start.plusHours(1), start.plusHours(2));
+        check("R0002".equals(created.getId()), "a preloaded reservation ID is not reused");
+        check(service.getReservations().size() == 2, "the new in-memory reservation is retained");
+    }
+
     private static void testOverlappingReservationIsRejected() {
         BookingService service = serviceWithOneRoom();
-        service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
-        expectFailure(() -> service.reserve("C101", "Sam", time("2026-10-20 10:30"), time("2026-10-20 11:30")));
+        service.reserve("C101", "Alex", time("10:00"), time("11:00"));
+        expectFailure(() -> service.reserve("C101", "Sam", time("10:30"), time("11:30")));
         check(service.getReservations().size() == 1, "rejected booking does not change reservations");
     }
 
     private static void testBackToBackReservationsAreAllowed() {
         BookingService service = serviceWithOneRoom();
-        service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
-        service.reserve("C101", "Sam", time("2026-10-20 11:00"), time("2026-10-20 12:00"));
+        service.reserve("C101", "Alex", time("10:00"), time("11:00"));
+        service.reserve("C101", "Sam", time("11:00"), time("12:00"));
         check(service.getReservations().size() == 2, "back-to-back reservations are allowed");
     }
 
@@ -59,34 +80,34 @@ public class BookingServiceTest {
         BookingService service = new BookingService(List.of(
                 new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30),
                 new Resource("C102", "Classroom 102", ResourceType.CLASSROOM, "Main Building", 20)));
-        service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
-        service.reserve("C102", "Sam", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
+        service.reserve("C101", "Alex", time("10:00"), time("11:00"));
+        service.reserve("C102", "Sam", time("10:00"), time("11:00"));
         check(service.getReservations().size() == 2, "different resources can be booked at the same time");
     }
 
     private static void testEndMustBeAfterStart() {
         BookingService service = serviceWithOneRoom();
-        expectFailure(() -> service.reserve("C101", "Alex", time("2026-10-20 11:00"), time("2026-10-20 10:00")));
+        expectFailure(() -> service.reserve("C101", "Alex", time("11:00"), time("10:00")));
         check(service.getReservations().isEmpty(), "invalid time range is not stored");
     }
 
     private static void testUnknownResourceIsRejected() {
         BookingService service = serviceWithOneRoom();
-        expectFailure(() -> service.reserve("UNKNOWN", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00")));
+        expectFailure(() -> service.reserve("UNKNOWN", "Alex", time("10:00"), time("11:00")));
     }
 
     private static void testInvalidBorrowerNameIsRejected() {
         BookingService service = serviceWithOneRoom();
-        expectFailure(() -> service.reserve("C101", "  ", time("2026-10-20 10:00"), time("2026-10-20 11:00")));
+        expectFailure(() -> service.reserve("C101", "  ", time("10:00"), time("11:00")));
         check(service.getReservations().isEmpty(), "blank borrower name is not stored");
     }
 
     private static void testAvailabilityUsesBookingOverlapRules() {
         BookingService service = serviceWithOneRoom();
-        service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
-        check(!service.isAvailable("C101", time("2026-10-20 10:30"), time("2026-10-20 11:30")),
+        service.reserve("C101", "Alex", time("10:00"), time("11:00"));
+        check(!service.isAvailable("C101", time("10:30"), time("11:30")),
                 "overlapping time is unavailable");
-        check(service.isAvailable("C101", time("2026-10-20 11:00"), time("2026-10-20 12:00")),
+        check(service.isAvailable("C101", time("11:00"), time("12:00")),
                 "back-to-back time is available");
     }
 
@@ -94,13 +115,13 @@ public class BookingServiceTest {
         BookingService service = new BookingService(List.of(
                 new Resource("C101", "Room 101", ResourceType.CLASSROOM, "Building A", 24),
                 new Resource("C102", "Room 102", ResourceType.CLASSROOM, "Building A", 18)));
-        service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
-        check(service.availableResources(time("2026-10-20 10:30"), time("2026-10-20 11:30"))
+        service.reserve("C101", "Alex", time("10:00"), time("11:00"));
+        check(service.availableResources(time("10:30"), time("11:30"))
                         .stream().map(Resource::getId).toList().equals(List.of("C102")),
                 "availability filtering excludes only the overlapping resource");
-        check(service.availableResources(time("2026-10-20 11:00"), time("2026-10-20 12:00")).size() == 2,
+        check(service.availableResources(time("11:00"), time("12:00")).size() == 2,
                 "availability filtering permits a booking at the previous end boundary");
-        expectFailure(() -> service.availableResources(time("2026-10-20 12:00"), time("2026-10-20 11:00")));
+        expectFailure(() -> service.availableResources(time("12:00"), time("11:00")));
     }
 
     private static void testDuplicateResourceIdsAreRejectedIgnoringCase() {
@@ -117,9 +138,9 @@ public class BookingServiceTest {
 
     private static void testCancellationMakesTimeAvailableAgain() {
         BookingService service = serviceWithOneRoom();
-        Reservation reservation = service.reserve("C101", "Alex", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
+        Reservation reservation = service.reserve("C101", "Alex", time("10:00"), time("11:00"));
         check(service.cancel(reservation.getId()), "existing reservation can be cancelled");
-        service.reserve("C101", "Sam", time("2026-10-20 10:00"), time("2026-10-20 11:00"));
+        service.reserve("C101", "Sam", time("10:00"), time("11:00"));
         check(service.getReservations().size() == 1, "cancelled time can be reserved again");
     }
 
@@ -302,7 +323,8 @@ public class BookingServiceTest {
     }
 
     private static LocalDateTime time(String value) {
-        return LocalDateTime.parse(value.replace(' ', 'T') + ":00");
+        // Use a relative date so these checks still work months or years later.
+        return LocalDate.now().plusDays(7).atTime(LocalTime.parse(value));
     }
 
     private static void expectFailure(Runnable action) {
