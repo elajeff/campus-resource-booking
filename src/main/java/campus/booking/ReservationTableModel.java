@@ -38,13 +38,10 @@ final class ReservationTableModel extends AbstractTableModel {
     @Override
     public Object getValueAt(int row, int column) {
         Reservation reservation = reservations.get(row);
-        String resourceName = bookingService.findResource(reservation.getResourceId())
-                .map(Resource::getName)
-                .orElse("Unknown resource");
-
         return switch (column) {
             case 0 -> reservation.getId();
-            case 1 -> resourceName;
+            case 1 -> bookingService.findResource(reservation.getResourceId())
+                    .map(Resource::getName).orElse("Unknown resource");
             case 2 -> reservation.getBorrowerName();
             case 3 -> reservation.getStart().format(DATE_FORMAT);
             case 4 -> reservation.getEnd().format(DATE_FORMAT);
