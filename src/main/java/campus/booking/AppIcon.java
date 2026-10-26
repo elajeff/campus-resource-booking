@@ -32,6 +32,9 @@ final class AppIcon {
     }
 
     static Image imageAtSize(int size) {
+        if (ICONS.isEmpty()) {
+            return null;
+        }
         for (int index = 0; index < ICON_SIZES.length; index++) {
             if (ICON_SIZES[index] == size) {
                 return ICONS.get(index);
