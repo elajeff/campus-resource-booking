@@ -2,6 +2,12 @@
 
 A Java desktop app for reserving shared rooms, books and equipment. It uses Swing for the interface and a local SQLite database for the inventory and bookings.
 
+Overlapping bookings are blocked twice: by the booking rules in Java and by a trigger in the database, so two bookings made at the same moment can't both get through. The window stays responsive because database work runs in the background, and a test harness covers the booking rules, time-slot edges and concurrent bookings.
+
+![The main window with the resource catalog, the booking form and two saved reservations](docs/images/main-window.png)
+
+The screenshot uses the built-in sample catalog and made-up bookings.
+
 ## What it does
 
 - Browse and search the catalog, and filter it to the resources that are free for a chosen time slot.
