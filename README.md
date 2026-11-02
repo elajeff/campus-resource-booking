@@ -58,4 +58,6 @@ The tests cover normal bookings, rejecting past times and bad input, conflicts a
 - There are no user accounts or permissions, opening hours or per-resource loan periods.
 - Retired resources and cancelled bookings stay in the database but aren't shown in the interface.
 
-The SQLite JDBC driver is from [Xerial](https://github.com/xerial/sqlite-jdbc) and is distributed with its license texts in `lib/`. The cat artwork is used for the app and date-picker icons; the `.ico` version can be used for Windows shortcuts.
+## License
+
+MIT. See [LICENSE](LICENSE). The SQLite JDBC driver is from [Xerial](https://github.com/xerial/sqlite-jdbc) and is distributed with its license texts in `lib/`. The cat artwork is used for the app and date-picker icons; the `.ico` version can be used for Windows shortcuts.
