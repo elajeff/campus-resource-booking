@@ -23,7 +23,7 @@ The sample catalog is made-up example data, not a real organization's inventory.
 - `BookingRepository` defines the storage operations and `SQLiteBookingRepository` implements them with JDBC and prepared statements.
 - A new booking gets its reference number and is inserted in one transaction. A SQLite trigger also rejects overlapping active bookings, so the database stays correct even if two bookings are attempted at once.
 - Retired resources and cancelled bookings are flagged rather than deleted, so their records are kept.
-- `BookingFrame` is the main window and `DateTimePickerDialog` is the date and time picker. The panels use layout managers and split panes, so they resize with the window.
+- `BookingFrame` is the main window, `AddResourceDialog` handles new inventory, and `DateTimePickerDialog` is the date and time picker. Shared input and button styling lives in `UiStyles`. The panels use layout managers and split panes, so they resize with the window.
 - Loading data and every write run in `SwingWorker`s, and the interface is only updated on the Event Dispatch Thread, so the window doesn't freeze while SQLite is working.
 - The availability filter uses the data already loaded in memory for a quick answer. The database still has the final say when a booking is saved.
 

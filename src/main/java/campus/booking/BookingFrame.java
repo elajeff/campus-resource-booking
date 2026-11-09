@@ -1,5 +1,7 @@
 package campus.booking;
 
+import static campus.booking.UiStyles.*;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -26,9 +28,6 @@ import java.util.function.Consumer;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
-import javax.swing.JDialog;
-import javax.swing.JComponent;
 import javax.swing.ImageIcon;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
@@ -42,7 +41,6 @@ import javax.swing.JTextField;
 import javax.swing.ListSelectionModel;
 import javax.swing.RowFilter;
 import javax.swing.Scrollable;
-import javax.swing.SwingConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.table.DefaultTableCellRenderer;
@@ -51,10 +49,6 @@ import javax.swing.table.TableRowSorter;
 public class BookingFrame extends JFrame {
     private static final Color BACKGROUND = new Color(244, 247, 249);
     private static final Color NAVY = new Color(25, 46, 62);
-    private static final Color INK = new Color(37, 53, 66);
-    private static final Color MUTED = new Color(111, 128, 141);
-    private static final Color TEAL = new Color(0, 126, 122);
-    private static final Color BORDER = new Color(222, 230, 234);
     private static final DateTimeFormatter PICKER_FORMAT =
             DateTimeFormatter.ofPattern("EEE, d MMM uuuu  ·  HH:mm", Locale.getDefault());
 
@@ -455,115 +449,10 @@ public class BookingFrame extends JFrame {
     }
 
     private void showAddResourceDialog() {
-        JDialog dialog = new JDialog(this, "Add a resource", true);
-        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
-
-        JTextField idField = new JTextField(18);
-        JTextField nameField = new JTextField(18);
-        JComboBox<ResourceType> typeField = new JComboBox<>(ResourceType.values());
-        JTextField locationField = new JTextField(18);
-        JTextField seatsField = new JTextField("0", 18);
-        for (JTextField field : new JTextField[]{idField, nameField, locationField, seatsField}) {
-            styleInput(field);
-        }
-        seatsField.setEnabled(false);
-        ComboBoxStyler.style(typeField, new Font("Segoe UI", Font.PLAIN, 13));
-        typeField.addActionListener(event -> {
-            boolean hasSeats = ((ResourceType) typeField.getSelectedItem()).hasSeatingCapacity();
-            seatsField.setEnabled(hasSeats);
-            if (hasSeats && (seatsField.getText().isBlank() || "0".equals(seatsField.getText().trim()))) {
-                seatsField.setText("24");
-            } else if (!hasSeats) {
-                seatsField.setText("0");
-            }
-        });
-
-        JPanel fields = new JPanel(new GridBagLayout());
-        fields.setBackground(Color.WHITE);
-        fields.setBorder(BorderFactory.createEmptyBorder(18, 20, 12, 20));
-        GridBagConstraints constraints = new GridBagConstraints();
-        constraints.insets = new Insets(5, 0, 5, 10);
-        constraints.anchor = GridBagConstraints.WEST;
-        constraints.fill = GridBagConstraints.HORIZONTAL;
-        constraints.weightx = 0;
-        addDialogField(fields, constraints, 0, "Resource ID", idField);
-        addDialogField(fields, constraints, 1, "Name", nameField);
-        addDialogField(fields, constraints, 2, "Type", typeField);
-        addDialogField(fields, constraints, 3, "Location", locationField);
-        addDialogField(fields, constraints, 4, "Seat capacity", seatsField);
-
-        JButton addButton = new JButton("Add resource");
-        stylePrimaryButton(addButton);
-        JButton closeButton = new JButton("Cancel");
-        styleButton(closeButton);
-        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 10));
-        actions.setBackground(Color.WHITE);
-        actions.setBorder(BorderFactory.createEmptyBorder(0, 12, 8, 12));
-        actions.add(closeButton);
-        actions.add(addButton);
-        JPanel content = new JPanel(new BorderLayout());
-        content.setBackground(Color.WHITE);
-        content.add(fields, BorderLayout.CENTER);
-        content.add(actions, BorderLayout.SOUTH);
-        dialog.setContentPane(content);
-
-        closeButton.addActionListener(event -> dialog.dispose());
-        addButton.addActionListener(event -> {
-            Resource resource;
-            try {
-                ResourceType type = (ResourceType) typeField.getSelectedItem();
-                int seats = type.hasSeatingCapacity() ? Integer.parseInt(seatsField.getText().trim()) : 0;
-                resource = new Resource(idField.getText(), nameField.getText(), type,
-                        locationField.getText(), seats);
-            } catch (NumberFormatException exception) {
-                showDialogError(dialog, "Seat capacity must be a whole number.");
-                return;
-            } catch (IllegalArgumentException exception) {
-                showDialogError(dialog, exception.getMessage());
-                return;
-            }
-
-            Component[] dialogControls = {idField, nameField, typeField, locationField,
-                    seatsField, addButton, closeButton};
-            for (Component control : dialogControls) control.setEnabled(false);
-            runDatabaseTask("Adding resource…", () -> {
-                bookingService.addResource(resource);
-                return null;
-            }, ignored -> {
-                refreshResources();
-                showFeedback("Resource added to the catalog.", TEAL);
-                dialog.dispose();
-            }, exception -> {
-                for (Component control : dialogControls) control.setEnabled(true);
-                showDialogError(dialog, messageOf(exception));
-            });
-        });
-        dialog.getRootPane().setDefaultButton(addButton);
-        dialog.pack();
-        dialog.setMinimumSize(new Dimension(420, dialog.getHeight()));
-        dialog.setResizable(false);
-        dialog.setLocationRelativeTo(this);
-        dialog.setVisible(true);
-    }
-
-    private static void addDialogField(JPanel panel, GridBagConstraints constraints,
-                                       int row, String label, JComponent field) {
-        JLabel caption = new JLabel(label);
-        caption.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        caption.setForeground(INK);
-        constraints.gridy = row;
-        constraints.gridx = 0;
-        constraints.weightx = 0;
-        panel.add(caption, constraints);
-        constraints.gridx = 1;
-        constraints.weightx = 1;
-        constraints.insets = new Insets(5, 0, 5, 0);
-        panel.add(field, constraints);
-        constraints.insets = new Insets(5, 0, 5, 10);
-    }
-
-    private static void showDialogError(JDialog dialog, String message) {
-        JOptionPane.showMessageDialog(dialog, message, "Could not add resource", JOptionPane.ERROR_MESSAGE);
+        new AddResourceDialog(this, bookingService, () -> {
+            refreshResources();
+            showFeedback("Resource added to the catalog.", TEAL);
+        }).setVisible(true);
     }
 
     private void retireSelectedResource() {
@@ -815,48 +704,6 @@ public class BookingFrame extends JFrame {
                 return component;
             }
         });
-    }
-
-    private static void styleInput(JTextField field) {
-        field.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        field.setForeground(INK);
-        field.setBackground(Color.WHITE);
-        field.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(BORDER), BorderFactory.createEmptyBorder(8, 10, 8, 10)));
-        field.setPreferredSize(new Dimension(100, 38));
-    }
-
-    private static void styleButton(JButton button) {
-        button.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        button.setRolloverEnabled(false);
-        button.setFocusPainted(false);
-        button.setHorizontalAlignment(SwingConstants.CENTER);
-    }
-
-    private static void stylePrimaryButton(JButton button) {
-        button.setFont(new Font("Segoe UI", Font.BOLD, 14));
-        button.setForeground(Color.WHITE);
-        button.setBackground(TEAL);
-        button.setOpaque(true);
-        button.setContentAreaFilled(true);
-        button.setBorder(BorderFactory.createEmptyBorder(10, 14, 10, 14));
-        button.setHorizontalAlignment(SwingConstants.CENTER);
-        button.setFocusPainted(false);
-        button.setRolloverEnabled(false);
-    }
-
-    private static void styleDateButton(JButton button) {
-        button.setFont(new Font("Segoe UI", Font.PLAIN, 13));
-        button.setForeground(INK);
-        button.setBackground(Color.WHITE);
-        button.setOpaque(true);
-        button.setContentAreaFilled(true);
-        button.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createLineBorder(BORDER), BorderFactory.createEmptyBorder(8, 10, 8, 10)));
-        button.setPreferredSize(new Dimension(100, 38));
-        button.setHorizontalAlignment(SwingConstants.LEFT);
-        button.setFocusPainted(false);
-        button.setRolloverEnabled(false);
     }
 
     private static void addFormLabel(JPanel panel, GridBagConstraints constraints, int row, String text) {
