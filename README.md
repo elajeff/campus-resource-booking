@@ -11,6 +11,7 @@ The screenshot uses the built-in sample catalog and made-up bookings.
 ## What it does
 
 - Browse and search the catalog, and filter it to the resources that are free for a chosen time slot.
+- Refresh the catalog and bookings to see changes made in another app window.
 - Book a resource for a future time slot, picking the date and time from a calendar picker, and cancel bookings.
 - Add inventory, and retire items that have no active bookings.
 - Reject overlapping bookings. A booking that starts exactly when another ends is allowed.
@@ -25,7 +26,7 @@ The sample catalog is made-up example data, not a real organization's inventory.
 - Retired resources and cancelled bookings are flagged rather than deleted, so their records are kept.
 - `BookingFrame` is the main window, `AddResourceDialog` handles new inventory, and `DateTimePickerDialog` is the date and time picker. Shared input and button styling lives in `UiStyles`. The panels use layout managers and split panes, so they resize with the window.
 - Loading data and every write run in `SwingWorker`s, and the interface is only updated on the Event Dispatch Thread, so the window doesn't freeze while SQLite is working.
-- The availability filter uses the data already loaded in memory for a quick answer. The database still has the final say when a booking is saved.
+- The availability filter uses the loaded data for a quick answer. Refresh reloads the catalog and bookings; Check availability also fetches current data. Writes reload the local snapshot first, and the database has the final say on booking conflicts and retirement.
 
 ## Running it
 
@@ -54,7 +55,7 @@ The tests cover normal bookings, rejecting past times and bad input, conflicts a
 
 ## Limitations
 
-- Data stays on one computer and one Windows user account; nothing is synced.
+- Data stays on one computer and one Windows user account; nothing is synced between computers. Open windows do not update live: use Refresh to see changes made in another window.
 - There are no user accounts or permissions, opening hours or per-resource loan periods.
 - Retired resources and cancelled bookings stay in the database but aren't shown in the interface.
 

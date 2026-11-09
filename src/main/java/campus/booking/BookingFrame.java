@@ -379,7 +379,15 @@ public class BookingFrame extends JFrame {
         styleButton(cancelButton);
         cancelButton.setEnabled(false);
         cancelButton.addActionListener(event -> cancelReservation());
-        heading.add(cancelButton, BorderLayout.EAST);
+        JButton refreshButton = new JButton("Refresh");
+        styleButton(refreshButton);
+        refreshButton.setToolTipText("Reload the catalog and bookings from the database");
+        refreshButton.addActionListener(event -> reloadData());
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
+        actions.setOpaque(false);
+        actions.add(refreshButton);
+        actions.add(cancelButton);
+        heading.add(actions, BorderLayout.EAST);
         panel.add(heading, BorderLayout.NORTH);
         JScrollPane scrollPane = tableScroll(reservationTable);
         scrollPane.setPreferredSize(new Dimension(100, 150));
@@ -451,6 +459,7 @@ public class BookingFrame extends JFrame {
     private void showAddResourceDialog() {
         new AddResourceDialog(this, bookingService, () -> {
             refreshResources();
+            loadReservations();
             showFeedback("Resource added to the catalog.", TEAL);
         }).setVisible(true);
     }
@@ -518,14 +527,36 @@ public class BookingFrame extends JFrame {
         }
     }
 
+    private void reloadData() {
+        runDatabaseTask("Refreshing catalog and bookings…", () -> {
+            bookingService.refresh();
+            return null;
+        }, ignored -> {
+            refreshResources();
+            loadReservations();
+            showFeedback("Catalog and bookings refreshed.", TEAL);
+        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
+    }
+
     private void checkAvailability() {
+        String resourceId;
         try {
-            boolean available = bookingService.isAvailable(requireSelectedResource(), startDateTime, endDateTime);
+            resourceId = requireSelectedResource();
+        } catch (IllegalArgumentException exception) {
+            showFeedback(exception.getMessage(), new Color(181, 77, 64));
+            return;
+        }
+        LocalDateTime start = startDateTime;
+        LocalDateTime end = endDateTime;
+        runDatabaseTask("Checking availability…", () -> {
+            bookingService.refresh();
+            return bookingService.isAvailable(resourceId, start, end);
+        }, available -> {
+            refreshResources();
+            loadReservations();
             showFeedback(available ? "Available for this time slot." : "Already reserved during this time slot.",
                     available ? TEAL : new Color(181, 77, 64));
-        } catch (IllegalArgumentException | BookingPersistenceException exception) {
-            showFeedback(exception.getMessage(), new Color(181, 77, 64));
-        }
+        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
     }
 
     private void createReservation() {
@@ -542,8 +573,8 @@ public class BookingFrame extends JFrame {
         runDatabaseTask("Saving reservation…", () ->
                 bookingService.reserve(resourceId, borrowerName, start, end), reservation -> {
             if (borrowerField.getText().equals(borrowerName)) borrowerField.setText("");
+            refreshResources();
             loadReservations();
-            filterResources();
             showFeedback("Reservation created · " + reservation.getId(), TEAL);
         }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
     }
@@ -554,9 +585,9 @@ public class BookingFrame extends JFrame {
         String reservationId = (String) reservationModel.getValueAt(
                 reservationTable.convertRowIndexToModel(selectedRow), 0);
         runDatabaseTask("Cancelling reservation…", () -> bookingService.cancel(reservationId), cancelled -> {
+            refreshResources();
+            loadReservations();
             if (cancelled) {
-                loadReservations();
-                filterResources();
                 showFeedback("Reservation " + reservationId + " cancelled.", TEAL);
             } else {
                 showFeedback("That reservation is no longer active.", new Color(181, 77, 64));
