@@ -66,10 +66,4 @@ public class Resource {
         active = false;
     }
 
-    @Override
-    public String toString() {
-        String seats = type.hasSeatingCapacity() ? "Seats: " + seatingCapacity : "";
-        return String.format("%-5s | %-11s | %-34s | %-20s | %s",
-                id, type, name, location, seats);
-    }
 }
