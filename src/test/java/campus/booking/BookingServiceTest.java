@@ -35,6 +35,7 @@ public class BookingServiceTest {
         testSampleCatalogHasMultipleBookAndEquipmentCopies();
         testSQLitePersistenceAndConflictConstraint();
         testConcurrentSQLiteBookingsCannotOverlap();
+        testChangesFromAnotherInstanceAreRefreshed();
         System.out.println("Passed " + testsRun + " application checks.");
     }
 
@@ -299,6 +300,66 @@ public class BookingServiceTest {
                 if (folder != null) Files.deleteIfExists(folder);
             } catch (Exception exception) {
                 throw new AssertionError("Could not remove the temporary concurrency-test database.", exception);
+            }
+        }
+    }
+
+    private static void testChangesFromAnotherInstanceAreRefreshed() {
+        Path folder = null;
+        Path database = null;
+        try {
+            folder = Files.createTempDirectory("booking-refresh-test-");
+            database = folder.resolve("bookings.db");
+            SQLiteBookingRepository repository = new SQLiteBookingRepository(database);
+            repository.initialize(List.of(new Resource("C101", "Room", ResourceType.CLASSROOM, "Main", 20)));
+            BookingService first = new BookingService(
+                    repository.loadResources(), repository.loadReservations(), repository);
+            LocalDateTime start = LocalDateTime.now().plusDays(1);
+            Reservation original = first.reserve("C101", "Alex", start, start.plusHours(1));
+            BookingService second = new BookingService(
+                    repository.loadResources(), repository.loadReservations(), repository);
+
+            first.cancel(original.getId());
+            Reservation replacement = second.reserve("C101", "Sam", start, start.plusHours(1));
+            check(repository.loadReservations().size() == 1,
+                    "another instance's cancellation no longer blocks rebooking");
+            check(second.getReservations().size() == 1,
+                    "rebooking removes the cancelled row from the local snapshot");
+
+            first.cancel(replacement.getId());
+            check(!second.cancel(replacement.getId()), "cancelling an already-cancelled row returns false");
+            check(second.getReservations().isEmpty(), "an already-cancelled row is removed from the local snapshot");
+            check(second.isAvailable("C101", start, start.plusHours(1)), "the cancelled slot becomes available");
+
+            first.reserve("C101", "Alex", start, start.plusHours(1));
+            first.addResource(new Resource("E001", "Camera", ResourceType.EQUIPMENT, "Desk", 0));
+            second.refresh();
+            check(!second.isAvailable("C101", start, start.plusHours(1)),
+                    "refresh loads another instance's new booking");
+            check(second.getResources().size() == 2, "refresh loads newly added inventory");
+            first.retireResource("E001");
+            second.refresh();
+            check(second.getResources().size() == 1, "refresh removes retired inventory from the active catalog");
+
+            try (var connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + database);
+                 var statement = connection.createStatement()) {
+                statement.executeUpdate("DROP TABLE reservations");
+            }
+            try {
+                second.refresh();
+                throw new AssertionError("Expected a refresh failure");
+            } catch (BookingPersistenceException expected) {
+                check(second.getReservations().size() == 1, "failed refresh preserves the last loaded bookings");
+                check(second.getResources().size() == 1, "failed refresh preserves the last loaded inventory");
+            }
+        } catch (Exception exception) {
+            throw new AssertionError("Cross-instance refresh checks could not complete.", exception);
+        } finally {
+            try {
+                if (database != null) Files.deleteIfExists(database);
+                if (folder != null) Files.deleteIfExists(folder);
+            } catch (Exception exception) {
+                throw new AssertionError("Could not remove the temporary refresh-test database.", exception);
             }
         }
     }

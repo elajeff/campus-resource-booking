@@ -45,6 +45,19 @@ public class BookingService {
         }
     }
 
+    /** Reloads the display snapshot. Call from a background task, not the Swing event thread. */
+    public void refresh() {
+        if (repository == null) return;
+        List<Resource> loadedResources = repository.loadResources();
+        List<Reservation> loadedReservations = repository.loadReservations();
+        synchronized (stateLock) {
+            resources.clear();
+            resources.addAll(loadedResources);
+            reservations.clear();
+            reservations.addAll(loadedReservations);
+        }
+    }
+
     public List<Resource> getResources() {
         synchronized (stateLock) {
             return resources.stream().filter(Resource::isActive).toList();
@@ -81,6 +94,7 @@ public class BookingService {
         if (!resource.isActive()) {
             throw new IllegalArgumentException("Only active resources can be added to the catalog.");
         }
+        refresh();
         if (repository == null) {
             synchronized (stateLock) {
                 ensureNewResourceLocked(resource);
@@ -99,11 +113,12 @@ public class BookingService {
     }
 
     public void retireResource(String resourceId) {
+        refresh();
         Resource resource;
         LocalDateTime now = LocalDateTime.now();
         synchronized (stateLock) {
             resource = requireActiveResourceLocked(resourceId);
-            if (hasActiveBookingLocked(resource, now)) {
+            if (repository == null && hasActiveBookingLocked(resource, now)) {
                 throw new IllegalArgumentException(
                         "This resource has a current or future booking and cannot be retired.");
             }
@@ -134,10 +149,11 @@ public class BookingService {
             throw new IllegalArgumentException("Reservation start time must be in the future.");
         }
 
+        refresh();
         Resource resource;
         synchronized (stateLock) {
             resource = requireActiveResourceLocked(resourceId);
-            if (!isAvailableLocked(resource, start, end)) {
+            if (repository == null && !isAvailableLocked(resource, start, end)) {
                 throw new IllegalArgumentException("That resource is already reserved for an overlapping time.");
             }
             if (repository == null) {
@@ -167,6 +183,7 @@ public class BookingService {
         if (reservationId == null || reservationId.trim().isEmpty()) {
             return false;
         }
+        refresh();
         Reservation reservation;
         synchronized (stateLock) {
             reservation = reservations.stream()
@@ -175,12 +192,12 @@ public class BookingService {
             if (reservation == null) return false;
             if (repository == null) return reservations.remove(reservation);
         }
-        if (!repository.cancelReservation(reservation.getId())) {
-            return false;
-        }
+        boolean cancelled = repository.cancelReservation(reservation.getId());
         synchronized (stateLock) {
-            return reservations.remove(reservation);
+            // An already-cancelled database row must not keep blocking this instance's cache.
+            reservations.remove(reservation);
         }
+        return cancelled;
     }
 
     private String nextReservationIdLocked() {
