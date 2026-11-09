@@ -458,11 +458,10 @@ public class BookingFrame extends JFrame {
         JTextField nameField = new JTextField(18);
         JComboBox<ResourceType> typeField = new JComboBox<>(ResourceType.values());
         JTextField locationField = new JTextField(18);
-        JTextField seatsField = new JTextField("24", 18);
+        JTextField seatsField = new JTextField("0", 18);
         for (JTextField field : new JTextField[]{idField, nameField, locationField, seatsField}) {
             styleInput(field);
         }
-        seatsField.setText("0");
         seatsField.setEnabled(false);
         ComboBoxStyler.style(typeField, new Font("Segoe UI", Font.PLAIN, 13));
         typeField.addActionListener(event -> {
