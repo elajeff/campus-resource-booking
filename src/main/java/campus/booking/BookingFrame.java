@@ -212,7 +212,6 @@ public class BookingFrame extends JFrame {
         resourceBody.setOpaque(false);
         searchField.setPreferredSize(new Dimension(200, 36));
         styleInput(searchField);
-        searchField.putClientProperty("JTextField.placeholderText", "Search name, ID, or location");
         searchField.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
             public void insertUpdate(javax.swing.event.DocumentEvent event) { filterResources(); }
             public void removeUpdate(javax.swing.event.DocumentEvent event) { filterResources(); }
@@ -224,6 +223,11 @@ public class BookingFrame extends JFrame {
         availableOnlyCheck.addActionListener(event -> filterResources());
         JPanel resourceFilters = new JPanel(new BorderLayout(10, 0));
         resourceFilters.setOpaque(false);
+        JLabel searchLabel = new JLabel("Search:");
+        searchLabel.setLabelFor(searchField);
+        searchLabel.setForeground(INK);
+        searchField.setToolTipText("Search by name, ID, type, or location");
+        resourceFilters.add(searchLabel, BorderLayout.WEST);
         resourceFilters.add(searchField, BorderLayout.CENTER);
         resourceFilters.add(availableOnlyCheck, BorderLayout.EAST);
         resourceBody.add(resourceFilters, BorderLayout.NORTH);
