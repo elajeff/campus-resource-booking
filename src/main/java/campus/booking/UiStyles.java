@@ -13,11 +13,16 @@ final class UiStyles {
     static final Color MUTED = new Color(111, 128, 141);
     static final Color TEAL = new Color(0, 126, 122);
     static final Color BORDER = new Color(222, 230, 234);
+    static final Color ERROR_COLOR = new Color(181, 77, 64);
+    static final Font BODY_FONT = new Font("Segoe UI", Font.PLAIN, 13);
+    static final Font SMALL_FONT = new Font("Segoe UI", Font.PLAIN, 12);
+    static final Font LABEL_FONT = new Font("Segoe UI", Font.BOLD, 11);
+    static final Font SMALL_BOLD_FONT = new Font("Segoe UI", Font.BOLD, 12);
 
     private UiStyles() { }
 
     static void styleInput(JTextField field) {
-        field.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        field.setFont(BODY_FONT);
         field.setForeground(INK);
         field.setBackground(Color.WHITE);
         field.setBorder(BorderFactory.createCompoundBorder(
@@ -26,7 +31,7 @@ final class UiStyles {
     }
 
     static void styleButton(JButton button) {
-        button.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        button.setFont(BODY_FONT);
         button.setRolloverEnabled(false);
         button.setFocusPainted(false);
         button.setHorizontalAlignment(SwingConstants.CENTER);
@@ -45,7 +50,7 @@ final class UiStyles {
     }
 
     static void styleDateButton(JButton button) {
-        button.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        button.setFont(BODY_FONT);
         button.setForeground(INK);
         button.setBackground(Color.WHITE);
         button.setOpaque(true);

@@ -1,7 +1,6 @@
 package campus.booking;
 
 import java.awt.Color;
-import java.awt.Font;
 import java.nio.file.Path;
 import java.util.concurrent.ExecutionException;
 import javax.swing.JOptionPane;
@@ -62,7 +61,7 @@ public class Main {
                     UIManager.put("nimbusBlueGrey", new Color(220, 230, 234));
                     UIManager.put("nimbusFocus", new Color(0, 126, 122));
                     UIManager.put("nimbusSelectionBackground", new Color(220, 240, 238));
-                    UIManager.put("defaultFont", new Font("Segoe UI", Font.PLAIN, 13));
+                    UIManager.put("defaultFont", UiStyles.BODY_FONT);
                     return;
                 }
             }

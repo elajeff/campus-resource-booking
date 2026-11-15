@@ -1,5 +1,7 @@
 package campus.booking;
 
+import static campus.booking.UiStyles.*;
+
 import java.awt.BorderLayout;
 import java.awt.Color;
 import java.awt.Component;
@@ -30,14 +32,6 @@ import javax.swing.plaf.basic.BasicSpinnerUI;
 
 /** A small click-based calendar and time chooser used by the booking form. */
 final class DateTimePickerDialog extends JDialog {
-    private static final Color INK = new Color(37, 53, 66);
-    private static final Color MUTED = new Color(111, 128, 141);
-    private static final Color TEAL = new Color(0, 126, 122);
-    private static final Color BORDER = new Color(222, 230, 234);
-    private static final Font BODY_FONT = new Font("Segoe UI", Font.PLAIN, 13);
-    private static final Font DAY_FONT = new Font("Segoe UI", Font.PLAIN, 12);
-    private static final Font WEEKDAY_FONT = new Font("Segoe UI", Font.BOLD, 11);
-
     private final JComboBox<Month> monthBox = new JComboBox<>(Month.values());
     private final JSpinner yearSpinner;
     private final JComboBox<String> hourBox = new JComboBox<>();
@@ -112,7 +106,7 @@ final class DateTimePickerDialog extends JDialog {
         weekdays.setOpaque(false);
         for (String day : new String[] {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"}) {
             JLabel label = new JLabel(day, SwingConstants.CENTER);
-            label.setFont(WEEKDAY_FONT);
+            label.setFont(LABEL_FONT);
             label.setForeground(MUTED);
             weekdays.add(label);
         }
@@ -125,7 +119,7 @@ final class DateTimePickerDialog extends JDialog {
         JPanel timePanel = new JPanel(new FlowLayout(FlowLayout.CENTER, 8, 0));
         timePanel.setOpaque(false);
         JLabel timeLabel = new JLabel("Time");
-        timeLabel.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        timeLabel.setFont(SMALL_BOLD_FONT);
         timeLabel.setForeground(MUTED);
         fillTimeOptions(hourBox, 24);
         fillTimeOptions(minuteBox, 60);
@@ -144,15 +138,9 @@ final class DateTimePickerDialog extends JDialog {
         center.add(timePanel, BorderLayout.SOUTH);
 
         JButton cancelButton = new JButton("Cancel");
-        cancelButton.setRolloverEnabled(false);
+        styleButton(cancelButton);
         cancelButton.addActionListener(event -> dispose());
-        chooseButton.setForeground(Color.WHITE);
-        chooseButton.setBackground(TEAL);
-        chooseButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
-        chooseButton.setOpaque(true);
-        chooseButton.setContentAreaFilled(true);
-        chooseButton.setBorderPainted(false);
-        chooseButton.setRolloverEnabled(false);
+        stylePrimaryButton(chooseButton);
         chooseButton.setPreferredSize(new Dimension(150, 36));
         chooseButton.addActionListener(event -> acceptSelection());
         JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 8, 0));
@@ -180,7 +168,7 @@ final class DateTimePickerDialog extends JDialog {
             }
             LocalDate date = yearMonth.atDay(day);
             JButton dayButton = new JButton(Integer.toString(day));
-            dayButton.setFont(DAY_FONT);
+            dayButton.setFont(SMALL_FONT);
             dayButton.setPreferredSize(new Dimension(38, 32));
             dayButton.setMargin(new java.awt.Insets(0, 0, 0, 0));
             dayButton.setOpaque(true);
