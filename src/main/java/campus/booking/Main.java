@@ -20,7 +20,7 @@ public class Main {
                             ".resource-booking", "bookings.db");
                     SQLiteBookingRepository repository = new SQLiteBookingRepository(databasePath);
                     repository.initialize(SampleData.createResources());
-                    return new BookingService(repository.loadResources(), repository.loadReservations(), repository);
+                    return new BookingService(repository);
                 }
 
                 @Override

@@ -11,7 +11,6 @@ import java.sql.DriverManager;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -43,17 +42,6 @@ class BookingServiceTest {
     }
 
     @Test
-    void inMemoryReservationIdsRemainUniqueWhenPreloaded() {
-        Resource room = new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30);
-        LocalDateTime start = LocalDate.now().plusDays(7).atTime(10, 0);
-        Reservation existing = new Reservation("R0001", "C101", "Alex", start, start.plusHours(1));
-        BookingService service = new BookingService(List.of(room), List.of(existing), null);
-        Reservation created = service.reserve("C101", "Sam", start.plusHours(1), start.plusHours(2));
-        assertEquals("R0002", created.getId());
-        assertEquals(2, service.getReservations().size());
-    }
-
-    @Test
     void overlappingReservationIsRejected() {
         BookingService service = serviceWithOneRoom();
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
@@ -72,9 +60,9 @@ class BookingServiceTest {
 
     @Test
     void differentResourcesCanBeReservedAtSameTime() {
-        BookingService service = new BookingService(List.of(
+        BookingService service = service(
                 new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30),
-                new Resource("C102", "Classroom 102", ResourceType.CLASSROOM, "Main Building", 20)));
+                new Resource("C102", "Classroom 102", ResourceType.CLASSROOM, "Main Building", 20));
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
         service.reserve("C102", "Sam", time("10:00"), time("11:00"));
         assertEquals(2, service.getReservations().size());
@@ -113,29 +101,15 @@ class BookingServiceTest {
 
     @Test
     void availabilityFilterUsesBookingOverlapRules() {
-        BookingService service = new BookingService(List.of(
+        BookingService service = service(
                 new Resource("C101", "Room 101", ResourceType.CLASSROOM, "Building A", 24),
-                new Resource("C102", "Room 102", ResourceType.CLASSROOM, "Building A", 18)));
+                new Resource("C102", "Room 102", ResourceType.CLASSROOM, "Building A", 18));
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
         assertEquals(List.of("C102"), service.availableResources(time("10:30"), time("11:30"))
                 .stream().map(Resource::getId).toList());
         assertEquals(2, service.availableResources(time("11:00"), time("12:00")).size());
         assertThrows(IllegalArgumentException.class,
                 () -> service.availableResources(time("12:00"), time("11:00")));
-    }
-
-    @Test
-    void duplicateResourceIdsAreRejectedIgnoringCase() {
-        assertThrows(IllegalArgumentException.class, () -> new BookingService(List.of(
-                new Resource("C101", "Room 1", ResourceType.CLASSROOM, "Main Building", 20),
-                new Resource("c101", "Room 2", ResourceType.CLASSROOM, "Main Building", 20))));
-    }
-
-    @Test
-    void nullResourceEntryIsRejected() {
-        List<Resource> resources = new ArrayList<>();
-        resources.add(null);
-        assertThrows(IllegalArgumentException.class, () -> new BookingService(resources));
     }
 
     @Test
@@ -218,8 +192,7 @@ class BookingServiceTest {
         assertTrue(reopened.cancelReservation(first.getId()));
         assertEquals(1, reopened.loadReservations().size());
 
-        BookingService service = new BookingService(
-                reopened.loadResources(), reopened.loadReservations(), reopened);
+        BookingService service = new BookingService(reopened);
         assertThrows(IllegalArgumentException.class, () -> service.retireResource("C101"));
         assertTrue(service.getResources().get(0).isActive());
         assertTrue(service.cancel(backToBack.getId()));
@@ -248,10 +221,8 @@ class BookingServiceTest {
         SQLiteBookingRepository firstRepository = new SQLiteBookingRepository(database);
         firstRepository.initialize(catalog);
         SQLiteBookingRepository secondRepository = new SQLiteBookingRepository(database);
-        BookingService firstService = new BookingService(
-                firstRepository.loadResources(), firstRepository.loadReservations(), firstRepository);
-        BookingService secondService = new BookingService(
-                secondRepository.loadResources(), secondRepository.loadReservations(), secondRepository);
+        BookingService firstService = new BookingService(firstRepository);
+        BookingService secondService = new BookingService(secondRepository);
 
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
@@ -276,12 +247,10 @@ class BookingServiceTest {
         Path database = folder.resolve("bookings.db");
         SQLiteBookingRepository repository = new SQLiteBookingRepository(database);
         repository.initialize(List.of(new Resource("C101", "Room", ResourceType.CLASSROOM, "Main", 20)));
-        BookingService first = new BookingService(
-                repository.loadResources(), repository.loadReservations(), repository);
+        BookingService first = new BookingService(repository);
         LocalDateTime start = LocalDateTime.now().plusDays(1);
         Reservation original = first.reserve("C101", "Alex", start, start.plusHours(1));
-        BookingService second = new BookingService(
-                repository.loadResources(), repository.loadReservations(), repository);
+        BookingService second = new BookingService(repository);
 
         first.cancel(original.getId());
         Reservation replacement = second.reserve("C101", "Sam", start, start.plusHours(1));
@@ -322,9 +291,14 @@ class BookingServiceTest {
         }
     }
 
-    private static BookingService serviceWithOneRoom() {
-        return new BookingService(List.of(
-                new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30)));
+    private BookingService service(Resource... catalog) {
+        SQLiteBookingRepository repository = new SQLiteBookingRepository(folder.resolve("bookings.db"));
+        repository.initialize(List.of(catalog));
+        return new BookingService(repository);
+    }
+
+    private BookingService serviceWithOneRoom() {
+        return service(new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30));
     }
 
     private static LocalDateTime time(String value) {
