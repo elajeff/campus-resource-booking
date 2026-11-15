@@ -2,7 +2,7 @@
 
 A Java desktop app for reserving shared rooms, books and equipment. It uses Swing for the interface and a local SQLite database for the inventory and bookings.
 
-Overlapping bookings are blocked twice: by the booking rules in Java and by a trigger in the database, so two bookings made at the same moment can't both get through. The window stays responsive because database work runs in the background, and a test harness covers the booking rules, time-slot edges and concurrent bookings.
+Overlapping bookings are blocked twice: by the booking rules in Java and by a trigger in the database, so two bookings made at the same moment can't both get through. The window stays responsive because database work runs in the background, and JUnit tests cover the booking rules, time-slot edges and concurrent bookings.
 
 ![The main window with the resource catalog, the booking form and two saved reservations](docs/images/main-window.png)
 
@@ -30,17 +30,10 @@ The sample catalog is made-up example data, not a real organization's inventory.
 
 ## Running it
 
-You need JDK 17 or newer (`java` and `javac` on `PATH`) and Windows for the batch scripts. The SQLite JDBC driver (Xerial 3.53.4.0) is included in `lib/` with its license files.
+You need JDK 17 or newer. The Maven wrapper downloads Maven and the SQLite JDBC driver on the first run.
 
 ```powershell
-.\build.bat
-.\run.bat
-```
-
-Or, after building:
-
-```powershell
-java -cp "out;lib/*" campus.booking.Main
+.\mvnw.cmd compile exec:java
 ```
 
 The database is saved at `%USERPROFILE%\.resource-booking\bookings.db`.
@@ -48,7 +41,7 @@ The database is saved at `%USERPROFILE%\.resource-booking\bookings.db`.
 ## Tests
 
 ```powershell
-.\test.bat
+.\mvnw.cmd verify
 ```
 
 The tests cover normal bookings, rejecting past times and bad input, conflicts at the edges of a time slot, the availability filter, cancelling, adding and retiring inventory, data surviving a database reopen, unique reference numbers, and two overlapping bookings attempted at the same time.
@@ -61,4 +54,4 @@ The tests cover normal bookings, rejecting past times and bad input, conflicts a
 
 ## License
 
-MIT. See [LICENSE](LICENSE). The SQLite JDBC driver is from [Xerial](https://github.com/xerial/sqlite-jdbc) and is distributed with its license texts in `lib/`. The cat artwork is used for the app and date-picker icons; the `.ico` version can be used for Windows shortcuts.
+MIT. See [LICENSE](LICENSE). The SQLite JDBC driver is from [Xerial](https://github.com/xerial/sqlite-jdbc). The cat artwork is used for the app and date-picker icons; the `.ico` version can be used for Windows shortcuts.

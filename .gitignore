@@ -1,5 +1,4 @@
-out/
-*.class
+target/
 *.db
 *.db-shm
 *.db-wal
