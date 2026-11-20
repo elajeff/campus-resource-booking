@@ -1,278 +1,260 @@
 package campus.booking;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.nio.file.Path;
+import java.sql.DriverManager;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
-import java.nio.file.Files;
-import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
-public class BookingServiceTest {
-    private static int testsRun;
+class BookingServiceTest {
+    @TempDir
+    Path folder;
 
-    public static void main(String[] args) {
-        testReservationCanBeCreated();
-        testPastReservationStartIsRejected();
-        testInMemoryReservationIdsRemainUniqueWhenPreloaded();
-        testOverlappingReservationIsRejected();
-        testBackToBackReservationsAreAllowed();
-        testDifferentResourcesCanBeReservedAtSameTime();
-        testEndMustBeAfterStart();
-        testUnknownResourceIsRejected();
-        testInvalidBorrowerNameIsRejected();
-        testAvailabilityUsesBookingOverlapRules();
-        testAvailabilityFilterUsesBookingOverlapRules();
-        testDuplicateResourceIdsAreRejectedIgnoringCase();
-        testNullResourceEntryIsRejected();
-        testCancellationMakesTimeAvailableAgain();
-        testResourcesCanBeAddedAndSafelyRetired();
-        testSeatingCapacityOnlyAppliesToRooms();
-        testSampleCatalogHasMultipleBookAndEquipmentCopies();
-        testSQLitePersistenceAndConflictConstraint();
-        testConcurrentSQLiteBookingsCannotOverlap();
-        testChangesFromAnotherInstanceAreRefreshed();
-        System.out.println("Passed " + testsRun + " application checks.");
-    }
-
-    private static void testReservationCanBeCreated() {
+    @Test
+    void reservationCanBeCreated() {
         BookingService service = serviceWithOneRoom();
         Reservation reservation = service.reserve("C101", "Alex", time("10:00"), time("11:00"));
-        check("R0001".equals(reservation.getId()), "first reservation gets a reference");
-        check(service.getReservations().size() == 1, "reservation is stored");
+        assertEquals("R0001", reservation.getId());
+        assertEquals(1, service.getReservations().size());
     }
 
-    private static void testPastReservationStartIsRejected() {
+    @Test
+    void pastReservationStartIsRejected() {
         BookingService service = serviceWithOneRoom();
         LocalDateTime start = LocalDateTime.now().minusDays(1);
-        expectFailure(() -> service.reserve("C101", "Alex", start, start.plusHours(1)));
-        check(service.getReservations().isEmpty(), "a past reservation is not stored");
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reserve("C101", "Alex", start, start.plusHours(1)));
+        assertTrue(service.getReservations().isEmpty());
     }
 
-    private static void testInMemoryReservationIdsRemainUniqueWhenPreloaded() {
+    @Test
+    void inMemoryReservationIdsRemainUniqueWhenPreloaded() {
         Resource room = new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30);
         LocalDateTime start = LocalDate.now().plusDays(7).atTime(10, 0);
         Reservation existing = new Reservation("R0001", "C101", "Alex", start, start.plusHours(1));
         BookingService service = new BookingService(List.of(room), List.of(existing), null);
         Reservation created = service.reserve("C101", "Sam", start.plusHours(1), start.plusHours(2));
-        check("R0002".equals(created.getId()), "a preloaded reservation ID is not reused");
-        check(service.getReservations().size() == 2, "the new in-memory reservation is retained");
+        assertEquals("R0002", created.getId());
+        assertEquals(2, service.getReservations().size());
     }
 
-    private static void testOverlappingReservationIsRejected() {
+    @Test
+    void overlappingReservationIsRejected() {
         BookingService service = serviceWithOneRoom();
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
-        expectFailure(() -> service.reserve("C101", "Sam", time("10:30"), time("11:30")));
-        check(service.getReservations().size() == 1, "rejected booking does not change reservations");
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reserve("C101", "Sam", time("10:30"), time("11:30")));
+        assertEquals(1, service.getReservations().size());
     }
 
-    private static void testBackToBackReservationsAreAllowed() {
+    @Test
+    void backToBackReservationsAreAllowed() {
         BookingService service = serviceWithOneRoom();
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
         service.reserve("C101", "Sam", time("11:00"), time("12:00"));
-        check(service.getReservations().size() == 2, "back-to-back reservations are allowed");
+        assertEquals(2, service.getReservations().size());
     }
 
-    private static void testDifferentResourcesCanBeReservedAtSameTime() {
+    @Test
+    void differentResourcesCanBeReservedAtSameTime() {
         BookingService service = new BookingService(List.of(
                 new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30),
                 new Resource("C102", "Classroom 102", ResourceType.CLASSROOM, "Main Building", 20)));
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
         service.reserve("C102", "Sam", time("10:00"), time("11:00"));
-        check(service.getReservations().size() == 2, "different resources can be booked at the same time");
+        assertEquals(2, service.getReservations().size());
     }
 
-    private static void testEndMustBeAfterStart() {
+    @Test
+    void endMustBeAfterStart() {
         BookingService service = serviceWithOneRoom();
-        expectFailure(() -> service.reserve("C101", "Alex", time("11:00"), time("10:00")));
-        check(service.getReservations().isEmpty(), "invalid time range is not stored");
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reserve("C101", "Alex", time("11:00"), time("10:00")));
+        assertTrue(service.getReservations().isEmpty());
     }
 
-    private static void testUnknownResourceIsRejected() {
+    @Test
+    void unknownResourceIsRejected() {
         BookingService service = serviceWithOneRoom();
-        expectFailure(() -> service.reserve("UNKNOWN", "Alex", time("10:00"), time("11:00")));
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reserve("UNKNOWN", "Alex", time("10:00"), time("11:00")));
     }
 
-    private static void testInvalidBorrowerNameIsRejected() {
+    @Test
+    void blankBorrowerNameIsRejected() {
         BookingService service = serviceWithOneRoom();
-        expectFailure(() -> service.reserve("C101", "  ", time("10:00"), time("11:00")));
-        check(service.getReservations().isEmpty(), "blank borrower name is not stored");
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reserve("C101", "  ", time("10:00"), time("11:00")));
+        assertTrue(service.getReservations().isEmpty());
     }
 
-    private static void testAvailabilityUsesBookingOverlapRules() {
+    @Test
+    void availabilityUsesBookingOverlapRules() {
         BookingService service = serviceWithOneRoom();
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
-        check(!service.isAvailable("C101", time("10:30"), time("11:30")),
-                "overlapping time is unavailable");
-        check(service.isAvailable("C101", time("11:00"), time("12:00")),
-                "back-to-back time is available");
+        assertFalse(service.isAvailable("C101", time("10:30"), time("11:30")));
+        assertTrue(service.isAvailable("C101", time("11:00"), time("12:00")));
     }
 
-    private static void testAvailabilityFilterUsesBookingOverlapRules() {
+    @Test
+    void availabilityFilterUsesBookingOverlapRules() {
         BookingService service = new BookingService(List.of(
                 new Resource("C101", "Room 101", ResourceType.CLASSROOM, "Building A", 24),
                 new Resource("C102", "Room 102", ResourceType.CLASSROOM, "Building A", 18)));
         service.reserve("C101", "Alex", time("10:00"), time("11:00"));
-        check(service.availableResources(time("10:30"), time("11:30"))
-                        .stream().map(Resource::getId).toList().equals(List.of("C102")),
-                "availability filtering excludes only the overlapping resource");
-        check(service.availableResources(time("11:00"), time("12:00")).size() == 2,
-                "availability filtering permits a booking at the previous end boundary");
-        expectFailure(() -> service.availableResources(time("12:00"), time("11:00")));
+        assertEquals(List.of("C102"), service.availableResources(time("10:30"), time("11:30"))
+                .stream().map(Resource::getId).toList());
+        assertEquals(2, service.availableResources(time("11:00"), time("12:00")).size());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.availableResources(time("12:00"), time("11:00")));
     }
 
-    private static void testDuplicateResourceIdsAreRejectedIgnoringCase() {
-        expectFailure(() -> new BookingService(List.of(
+    @Test
+    void duplicateResourceIdsAreRejectedIgnoringCase() {
+        assertThrows(IllegalArgumentException.class, () -> new BookingService(List.of(
                 new Resource("C101", "Room 1", ResourceType.CLASSROOM, "Main Building", 20),
                 new Resource("c101", "Room 2", ResourceType.CLASSROOM, "Main Building", 20))));
     }
 
-    private static void testNullResourceEntryIsRejected() {
-        List<Resource> resources = new java.util.ArrayList<>();
+    @Test
+    void nullResourceEntryIsRejected() {
+        List<Resource> resources = new ArrayList<>();
         resources.add(null);
-        expectFailure(() -> new BookingService(resources));
+        assertThrows(IllegalArgumentException.class, () -> new BookingService(resources));
     }
 
-    private static void testCancellationMakesTimeAvailableAgain() {
+    @Test
+    void cancellationMakesTimeAvailableAgain() {
         BookingService service = serviceWithOneRoom();
         Reservation reservation = service.reserve("C101", "Alex", time("10:00"), time("11:00"));
-        check(service.cancel(reservation.getId()), "existing reservation can be cancelled");
+        assertTrue(service.cancel(reservation.getId()));
         service.reserve("C101", "Sam", time("10:00"), time("11:00"));
-        check(service.getReservations().size() == 1, "cancelled time can be reserved again");
+        assertEquals(1, service.getReservations().size());
     }
 
-    private static void testResourcesCanBeAddedAndSafelyRetired() {
+    @Test
+    void resourcesCanBeAddedAndSafelyRetired() {
         BookingService service = serviceWithOneRoom();
         Resource equipment = new Resource("E014", "Audio recorder", ResourceType.EQUIPMENT, "Media desk", 0);
         service.addResource(equipment);
-        check(service.getResources().size() == 2, "new resource appears in the active catalog");
-        expectFailure(() -> service.addResource(
+        assertEquals(2, service.getResources().size());
+        assertThrows(IllegalArgumentException.class, () -> service.addResource(
                 new Resource("e014", "Duplicate recorder", ResourceType.EQUIPMENT, "Media desk", 0)));
 
         LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
         Reservation booking = service.reserve("C101", "Alex", start, start.plusHours(1));
-        expectFailure(() -> service.retireResource("C101"));
-        check(service.findResource("C101").orElseThrow().isActive(),
-                "resource with an active booking remains active after failed retirement");
-        check(service.cancel(booking.getId()), "reservation can be cancelled before retiring its resource");
+        assertThrows(IllegalArgumentException.class, () -> service.retireResource("C101"));
+        assertTrue(service.findResource("C101").orElseThrow().isActive());
+        assertTrue(service.cancel(booking.getId()));
         service.retireResource("C101");
-        check(service.getResources().size() == 1, "retired resource is removed from the active catalog");
-        check(service.findResource("C101").isPresent()
-                        && !service.findResource("C101").orElseThrow().isActive(),
-                "retirement preserves the resource record for reservation references");
-        expectFailure(() -> service.reserve("C101", "Sam", start.plusHours(1), start.plusHours(2)));
+        assertEquals(1, service.getResources().size());
+        assertFalse(service.findResource("C101").orElseThrow().isActive());
+        assertThrows(IllegalArgumentException.class,
+                () -> service.reserve("C101", "Sam", start.plusHours(1), start.plusHours(2)));
     }
 
-    private static void testSeatingCapacityOnlyAppliesToRooms() {
+    @Test
+    void seatingCapacityOnlyAppliesToRooms() {
         Resource book = new Resource("B001", "Book", ResourceType.BOOK, "Library", 0);
         Resource equipment = new Resource("E001", "Laptop", ResourceType.EQUIPMENT, "Desk", 0);
         Resource room = new Resource("C101", "Room", ResourceType.CLASSROOM, "Building A", 24);
-        check(book.getSeatingCapacity() == 0 && !book.getType().hasSeatingCapacity(),
-                "books do not report a seat count");
-        check(equipment.getSeatingCapacity() == 0 && !equipment.getType().hasSeatingCapacity(),
-                "equipment does not report a seat count");
-        check(room.getSeatingCapacity() == 24 && room.getType().hasSeatingCapacity(),
-                "rooms retain their seat count");
-        expectFailure(() -> new Resource("B002", "Book", ResourceType.BOOK, "Library", 1));
-        expectFailure(() -> new Resource("C102", "Room", ResourceType.CLASSROOM, "Building A", 0));
+        assertFalse(book.getType().hasSeatingCapacity());
+        assertFalse(equipment.getType().hasSeatingCapacity());
+        assertEquals(24, room.getSeatingCapacity());
+        assertTrue(room.getType().hasSeatingCapacity());
+        assertThrows(IllegalArgumentException.class,
+                () -> new Resource("B002", "Book", ResourceType.BOOK, "Library", 1));
+        assertThrows(IllegalArgumentException.class,
+                () -> new Resource("C102", "Room", ResourceType.CLASSROOM, "Building A", 0));
     }
 
-    private static void testSampleCatalogHasMultipleBookAndEquipmentCopies() {
+    @Test
+    void sampleCatalogHasMultipleBookAndEquipmentCopies() {
         List<Resource> resources = SampleData.createResources();
         long books = resources.stream().filter(resource -> resource.getType() == ResourceType.BOOK).count();
         long equipment = resources.stream().filter(resource -> resource.getType() == ResourceType.EQUIPMENT).count();
-        check(resources.size() == 70, "sample catalog has the expected 70 individual resources");
-        check(books == 28, "sample catalog includes 28 individually bookable book copies");
-        check(equipment == 20, "sample catalog includes 20 individually bookable equipment items");
-        check("—".equals(new ResourceTableModel(resources).getValueAt(0, 4)),
-                "the resource table shows that books have no seating capacity");
+        assertEquals(70, resources.size());
+        assertEquals(28, books);
+        assertEquals(20, equipment);
+        assertEquals("—", new ResourceTableModel(resources).getValueAt(0, 4));
     }
 
-    private static void testSQLitePersistenceAndConflictConstraint() {
-        Path database = null;
-        Path folder = null;
-        try {
-            folder = Files.createTempDirectory("booking-sqlite-test-");
-            database = folder.resolve("bookings.db");
-            List<Resource> catalog = List.of(
-                    new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30));
-            SQLiteBookingRepository repository = new SQLiteBookingRepository(database);
-            repository.initialize(catalog);
+    @Test
+    void sqlitePersistenceAndConflictConstraint() {
+        Path database = folder.resolve("bookings.db");
+        List<Resource> catalog = List.of(
+                new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30));
+        SQLiteBookingRepository repository = new SQLiteBookingRepository(database);
+        repository.initialize(catalog);
 
-            LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
-            Reservation first = repository.createReservation("C101", "Alex", start, start.plusHours(1));
-            check("R0001".equals(first.getId()), "first database reservation gets the expected reference");
-            expectFailure(() -> repository.createReservation("C101", "Sam",
-                    start.plusMinutes(30), start.plusHours(2)));
-            Reservation backToBack = repository.createReservation("C101", "Sam",
-                    start.plusHours(1), start.plusHours(2));
-            check("R0002".equals(backToBack.getId()), "a rejected transaction does not consume a reservation number");
+        LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
+        Reservation first = repository.createReservation("C101", "Alex", start, start.plusHours(1));
+        assertEquals("R0001", first.getId());
+        assertThrows(IllegalArgumentException.class, () -> repository.createReservation("C101", "Sam",
+                start.plusMinutes(30), start.plusHours(2)));
+        Reservation backToBack = repository.createReservation("C101", "Sam",
+                start.plusHours(1), start.plusHours(2));
+        assertEquals("R0002", backToBack.getId(), "a rejected transaction does not use up a number");
 
-            SQLiteBookingRepository reopened = new SQLiteBookingRepository(database);
-            reopened.initialize(catalog);
-            check(reopened.loadReservations().size() == 2, "reservations reload after reopening the database");
-            check(reopened.loadResources().size() == 1, "the initial catalog is not duplicated on restart");
-            check(reopened.cancelReservation(first.getId()), "a saved reservation can be cancelled in SQLite");
-            check(reopened.loadReservations().size() == 1, "cancelled reservations are excluded from active bookings");
+        SQLiteBookingRepository reopened = new SQLiteBookingRepository(database);
+        reopened.initialize(catalog);
+        assertEquals(2, reopened.loadReservations().size());
+        assertEquals(1, reopened.loadResources().size(), "the catalog is not added twice on restart");
+        assertTrue(reopened.cancelReservation(first.getId()));
+        assertEquals(1, reopened.loadReservations().size());
 
-            BookingService service = new BookingService(
-                    reopened.loadResources(), reopened.loadReservations(), reopened);
-            expectFailure(() -> service.retireResource("C101"));
-            check(service.getResources().get(0).isActive(), "a resource with a future booking stays active");
-            check(service.cancel(backToBack.getId()), "the persisted booking can be cancelled through the service");
-            Resource equipment = new Resource("E001", "Portable speaker", ResourceType.EQUIPMENT, "Media desk", 0);
-            service.addResource(equipment);
-            check(reopened.loadResources().size() == 2, "inventory additions persist in SQLite");
-            service.retireResource("C101");
+        BookingService service = new BookingService(
+                reopened.loadResources(), reopened.loadReservations(), reopened);
+        assertThrows(IllegalArgumentException.class, () -> service.retireResource("C101"));
+        assertTrue(service.getResources().get(0).isActive());
+        assertTrue(service.cancel(backToBack.getId()));
+        Resource equipment = new Resource("E001", "Portable speaker", ResourceType.EQUIPMENT, "Media desk", 0);
+        service.addResource(equipment);
+        assertEquals(2, reopened.loadResources().size());
+        service.retireResource("C101");
 
-            Reservation afterRestart = reopened.createReservation("E001", "Taylor", start, start.plusHours(1));
-            check("R0003".equals(afterRestart.getId()), "reservation numbers remain unique after cancellation");
-            check(reopened.cancelReservation(afterRestart.getId()), "the additional persisted booking can be cancelled");
-            SQLiteBookingRepository afterRetirement = new SQLiteBookingRepository(database);
-            afterRetirement.initialize(catalog);
-            check(afterRetirement.loadResources().size() == 2
-                            && afterRetirement.loadResources().stream()
-                            .filter(resource -> resource.getId().equals("C101"))
-                            .noneMatch(Resource::isActive),
-                    "retired resources stay in the database but are inactive after restart");
-            check(afterRetirement.loadReservations().isEmpty(), "cancelled bookings stay out of the active list after restart");
-        } catch (Exception exception) {
-            throw new AssertionError("SQLite persistence checks could not complete.", exception);
-        } finally {
-            try {
-                if (database != null) {
-                    Files.deleteIfExists(Path.of(database + "-shm"));
-                    Files.deleteIfExists(Path.of(database + "-wal"));
-                    Files.deleteIfExists(database);
-                }
-                if (folder != null) Files.deleteIfExists(folder);
-            } catch (Exception exception) {
-                throw new AssertionError("Could not remove the temporary test database.", exception);
-            }
-        }
+        Reservation afterRestart = reopened.createReservation("E001", "Taylor", start, start.plusHours(1));
+        assertEquals("R0003", afterRestart.getId());
+        assertTrue(reopened.cancelReservation(afterRestart.getId()));
+        SQLiteBookingRepository afterRetirement = new SQLiteBookingRepository(database);
+        afterRetirement.initialize(catalog);
+        assertEquals(2, afterRetirement.loadResources().size());
+        assertTrue(afterRetirement.loadResources().stream()
+                .filter(resource -> resource.getId().equals("C101"))
+                .noneMatch(Resource::isActive));
+        assertTrue(afterRetirement.loadReservations().isEmpty());
     }
 
-    private static void testConcurrentSQLiteBookingsCannotOverlap() {
-        Path folder = null;
-        Path database = null;
+    @Test
+    void concurrentSQLiteBookingsCannotOverlap() throws Exception {
+        Path database = folder.resolve("bookings.db");
+        List<Resource> catalog = List.of(
+                new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30));
+        SQLiteBookingRepository firstRepository = new SQLiteBookingRepository(database);
+        firstRepository.initialize(catalog);
+        SQLiteBookingRepository secondRepository = new SQLiteBookingRepository(database);
+        BookingService firstService = new BookingService(
+                firstRepository.loadResources(), firstRepository.loadReservations(), firstRepository);
+        BookingService secondService = new BookingService(
+                secondRepository.loadResources(), secondRepository.loadReservations(), secondRepository);
+
         ExecutorService workers = Executors.newFixedThreadPool(2);
         try {
-            folder = Files.createTempDirectory("booking-concurrency-test-");
-            database = folder.resolve("bookings.db");
-            List<Resource> catalog = List.of(
-                    new Resource("C101", "Classroom 101", ResourceType.CLASSROOM, "Main Building", 30));
-            SQLiteBookingRepository firstRepository = new SQLiteBookingRepository(database);
-            firstRepository.initialize(catalog);
-            SQLiteBookingRepository secondRepository = new SQLiteBookingRepository(database);
-            BookingService firstService = new BookingService(
-                    firstRepository.loadResources(), firstRepository.loadReservations(), firstRepository);
-            BookingService secondService = new BookingService(
-                    secondRepository.loadResources(), secondRepository.loadReservations(), secondRepository);
-
             CountDownLatch startTogether = new CountDownLatch(1);
             LocalDateTime start = LocalDateTime.now().plusDays(1).withSecond(0).withNano(0);
             Future<Boolean> first = workers.submit(() -> attemptReservation(
@@ -281,100 +263,62 @@ public class BookingServiceTest {
                     secondService, startTogether, "Sam", start));
             startTogether.countDown();
 
-            boolean firstSucceeded = first.get(10, TimeUnit.SECONDS);
-            boolean secondSucceeded = second.get(10, TimeUnit.SECONDS);
-            check(firstSucceeded != secondSucceeded,
-                    "only one simultaneous overlapping reservation can succeed");
-            check(firstRepository.loadReservations().size() == 1,
-                    "SQLite stores exactly one of the simultaneous overlapping reservations");
-        } catch (Exception exception) {
-            throw new AssertionError("Concurrent SQLite booking checks could not complete.", exception);
+            assertNotEquals(first.get(10, TimeUnit.SECONDS), second.get(10, TimeUnit.SECONDS),
+                    "only one of two overlapping bookings made at once succeeds");
+            assertEquals(1, firstRepository.loadReservations().size());
         } finally {
             workers.shutdownNow();
-            try {
-                if (database != null) {
-                    Files.deleteIfExists(Path.of(database + "-shm"));
-                    Files.deleteIfExists(Path.of(database + "-wal"));
-                    Files.deleteIfExists(database);
-                }
-                if (folder != null) Files.deleteIfExists(folder);
-            } catch (Exception exception) {
-                throw new AssertionError("Could not remove the temporary concurrency-test database.", exception);
-            }
         }
     }
 
-    private static void testChangesFromAnotherInstanceAreRefreshed() {
-        Path folder = null;
-        Path database = null;
-        try {
-            folder = Files.createTempDirectory("booking-refresh-test-");
-            database = folder.resolve("bookings.db");
-            SQLiteBookingRepository repository = new SQLiteBookingRepository(database);
-            repository.initialize(List.of(new Resource("C101", "Room", ResourceType.CLASSROOM, "Main", 20)));
-            BookingService first = new BookingService(
-                    repository.loadResources(), repository.loadReservations(), repository);
-            LocalDateTime start = LocalDateTime.now().plusDays(1);
-            Reservation original = first.reserve("C101", "Alex", start, start.plusHours(1));
-            BookingService second = new BookingService(
-                    repository.loadResources(), repository.loadReservations(), repository);
+    @Test
+    void changesFromAnotherInstanceAreRefreshed() throws Exception {
+        Path database = folder.resolve("bookings.db");
+        SQLiteBookingRepository repository = new SQLiteBookingRepository(database);
+        repository.initialize(List.of(new Resource("C101", "Room", ResourceType.CLASSROOM, "Main", 20)));
+        BookingService first = new BookingService(
+                repository.loadResources(), repository.loadReservations(), repository);
+        LocalDateTime start = LocalDateTime.now().plusDays(1);
+        Reservation original = first.reserve("C101", "Alex", start, start.plusHours(1));
+        BookingService second = new BookingService(
+                repository.loadResources(), repository.loadReservations(), repository);
 
-            first.cancel(original.getId());
-            Reservation replacement = second.reserve("C101", "Sam", start, start.plusHours(1));
-            check(repository.loadReservations().size() == 1,
-                    "another instance's cancellation no longer blocks rebooking");
-            check(second.getReservations().size() == 1,
-                    "rebooking removes the cancelled row from the local snapshot");
+        first.cancel(original.getId());
+        Reservation replacement = second.reserve("C101", "Sam", start, start.plusHours(1));
+        assertEquals(1, repository.loadReservations().size());
+        assertEquals(1, second.getReservations().size());
 
-            first.cancel(replacement.getId());
-            check(!second.cancel(replacement.getId()), "cancelling an already-cancelled row returns false");
-            check(second.getReservations().isEmpty(), "an already-cancelled row is removed from the local snapshot");
-            check(second.isAvailable("C101", start, start.plusHours(1)), "the cancelled slot becomes available");
+        first.cancel(replacement.getId());
+        assertFalse(second.cancel(replacement.getId()), "cancelling an already-cancelled row returns false");
+        assertTrue(second.getReservations().isEmpty());
+        assertTrue(second.isAvailable("C101", start, start.plusHours(1)));
 
-            first.reserve("C101", "Alex", start, start.plusHours(1));
-            first.addResource(new Resource("E001", "Camera", ResourceType.EQUIPMENT, "Desk", 0));
-            second.refresh();
-            check(!second.isAvailable("C101", start, start.plusHours(1)),
-                    "refresh loads another instance's new booking");
-            check(second.getResources().size() == 2, "refresh loads newly added inventory");
-            first.retireResource("E001");
-            second.refresh();
-            check(second.getResources().size() == 1, "refresh removes retired inventory from the active catalog");
+        first.reserve("C101", "Alex", start, start.plusHours(1));
+        first.addResource(new Resource("E001", "Camera", ResourceType.EQUIPMENT, "Desk", 0));
+        second.refresh();
+        assertFalse(second.isAvailable("C101", start, start.plusHours(1)));
+        assertEquals(2, second.getResources().size());
+        first.retireResource("E001");
+        second.refresh();
+        assertEquals(1, second.getResources().size());
 
-            try (var connection = java.sql.DriverManager.getConnection("jdbc:sqlite:" + database);
-                 var statement = connection.createStatement()) {
-                statement.executeUpdate("DROP TABLE reservations");
-            }
-            try {
-                second.refresh();
-                throw new AssertionError("Expected a refresh failure");
-            } catch (BookingPersistenceException expected) {
-                check(second.getReservations().size() == 1, "failed refresh preserves the last loaded bookings");
-                check(second.getResources().size() == 1, "failed refresh preserves the last loaded inventory");
-            }
-        } catch (Exception exception) {
-            throw new AssertionError("Cross-instance refresh checks could not complete.", exception);
-        } finally {
-            try {
-                if (database != null) Files.deleteIfExists(database);
-                if (folder != null) Files.deleteIfExists(folder);
-            } catch (Exception exception) {
-                throw new AssertionError("Could not remove the temporary refresh-test database.", exception);
-            }
+        try (var connection = DriverManager.getConnection("jdbc:sqlite:" + database);
+             var statement = connection.createStatement()) {
+            statement.executeUpdate("DROP TABLE reservations");
         }
+        assertThrows(BookingPersistenceException.class, second::refresh);
+        assertEquals(1, second.getReservations().size(), "a failed refresh keeps the last loaded bookings");
+        assertEquals(1, second.getResources().size());
     }
 
     private static boolean attemptReservation(BookingService service, CountDownLatch startTogether,
-                                              String borrower, LocalDateTime start) {
+                                              String borrower, LocalDateTime start) throws InterruptedException {
+        startTogether.await();
         try {
-            startTogether.await();
             service.reserve("C101", borrower, start, start.plusHours(1));
             return true;
         } catch (IllegalArgumentException expectedConflict) {
             return false;
-        } catch (InterruptedException exception) {
-            Thread.currentThread().interrupt();
-            throw new AssertionError("Concurrent reservation worker was interrupted.", exception);
         }
     }
 
@@ -384,23 +328,7 @@ public class BookingServiceTest {
     }
 
     private static LocalDateTime time(String value) {
-        // Use a relative date so these checks still work months or years later.
+        // Use a relative date so these tests still work months or years later.
         return LocalDate.now().plusDays(7).atTime(LocalTime.parse(value));
-    }
-
-    private static void expectFailure(Runnable action) {
-        try {
-            action.run();
-            throw new AssertionError("Expected the operation to be rejected.");
-        } catch (IllegalArgumentException expected) {
-            testsRun++;
-        }
-    }
-
-    private static void check(boolean condition, String message) {
-        if (!condition) {
-            throw new AssertionError(message);
-        }
-        testsRun++;
     }
 }
