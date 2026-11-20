@@ -1,5 +1,7 @@
 package campus.booking;
 
+import static campus.booking.UiStyles.INK;
+
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Font;
@@ -9,8 +11,6 @@ import javax.swing.JLabel;
 
 /** Applies the application's light, neutral style to choice controls. */
 final class ComboBoxStyler {
-    private static final Color INK = new Color(37, 53, 66);
-
     private ComboBoxStyler() { }
 
     static void style(JComboBox<?> comboBox, Font font) {

@@ -172,7 +172,7 @@ public class BookingFrame extends JFrame {
         title.setFont(new Font("Segoe UI", Font.BOLD, 24));
         JLabel subtitle = new JLabel("Find a space or item, check its time slot, and make a reservation.");
         subtitle.setForeground(new Color(197, 212, 222));
-        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 13));
+        subtitle.setFont(BODY_FONT);
         titles.add(title, BorderLayout.NORTH);
         titles.add(subtitle, BorderLayout.SOUTH);
 
@@ -185,7 +185,7 @@ public class BookingFrame extends JFrame {
 
         JLabel session = new JLabel("  SAVED LOCALLY  ");
         session.setForeground(new Color(220, 239, 237));
-        session.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        session.setFont(LABEL_FONT);
         session.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createLineBorder(new Color(72, 112, 125)),
                 BorderFactory.createEmptyBorder(8, 8, 8, 8)));
@@ -211,7 +211,7 @@ public class BookingFrame extends JFrame {
             public void removeUpdate(javax.swing.event.DocumentEvent event) { filterResources(); }
             public void changedUpdate(javax.swing.event.DocumentEvent event) { filterResources(); }
         });
-        availableOnlyCheck.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        availableOnlyCheck.setFont(SMALL_FONT);
         availableOnlyCheck.setForeground(INK);
         availableOnlyCheck.setOpaque(false);
         availableOnlyCheck.addActionListener(event -> filterResources());
@@ -262,7 +262,7 @@ public class BookingFrame extends JFrame {
         resourceCountLabel.setForeground(INK);
         resourceCountLabel.setText("Resources (" + bookingService.getResources().size() + ")");
         JLabel subtitle = new JLabel("Search the catalog or add and retire inventory.");
-        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtitle.setFont(SMALL_FONT);
         subtitle.setForeground(MUTED);
         labels.add(resourceCountLabel, BorderLayout.NORTH);
         labels.add(subtitle, BorderLayout.SOUTH);
@@ -270,7 +270,7 @@ public class BookingFrame extends JFrame {
 
         JButton addResourceButton = new JButton("Add resource");
         stylePrimaryButton(addResourceButton);
-        addResourceButton.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        addResourceButton.setFont(SMALL_BOLD_FONT);
         addResourceButton.setBorder(BorderFactory.createEmptyBorder(8, 12, 8, 12));
         addResourceButton.addActionListener(event -> showAddResourceDialog());
         styleButton(retireResourceButton);
@@ -355,7 +355,7 @@ public class BookingFrame extends JFrame {
         feedbackField.setWrapStyleWord(true);
         feedbackField.setRows(2);
         feedbackField.setPreferredSize(new Dimension(200, 40));
-        feedbackField.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        feedbackField.setFont(SMALL_FONT);
         feedbackField.setForeground(MUTED);
         feedbackField.setBackground(Color.WHITE);
         feedbackField.setBorder(BorderFactory.createEmptyBorder(2, 0, 2, 0));
@@ -407,7 +407,7 @@ public class BookingFrame extends JFrame {
                 }
             } catch (IllegalArgumentException exception) {
                 availableIds = Set.of();
-                showFeedback(exception.getMessage(), new Color(181, 77, 64));
+                showFeedback(exception.getMessage(), ERROR_COLOR);
             }
         }
         String normalizedQuery = query.toLowerCase(Locale.ROOT);
@@ -481,7 +481,7 @@ public class BookingFrame extends JFrame {
             refreshResources();
             retireResourceButton.setEnabled(false);
             showFeedback("Resource retired from the active catalog.", TEAL);
-        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
+        }, exception -> showFeedback(messageOf(exception), ERROR_COLOR));
     }
 
     private void adjustSelectedResourceField() {
@@ -535,7 +535,7 @@ public class BookingFrame extends JFrame {
             refreshResources();
             loadReservations();
             showFeedback("Catalog and bookings refreshed.", TEAL);
-        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
+        }, exception -> showFeedback(messageOf(exception), ERROR_COLOR));
     }
 
     private void checkAvailability() {
@@ -543,7 +543,7 @@ public class BookingFrame extends JFrame {
         try {
             resourceId = requireSelectedResource();
         } catch (IllegalArgumentException exception) {
-            showFeedback(exception.getMessage(), new Color(181, 77, 64));
+            showFeedback(exception.getMessage(), ERROR_COLOR);
             return;
         }
         LocalDateTime start = startDateTime;
@@ -555,8 +555,8 @@ public class BookingFrame extends JFrame {
             refreshResources();
             loadReservations();
             showFeedback(available ? "Available for this time slot." : "Already reserved during this time slot.",
-                    available ? TEAL : new Color(181, 77, 64));
-        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
+                    available ? TEAL : ERROR_COLOR);
+        }, exception -> showFeedback(messageOf(exception), ERROR_COLOR));
     }
 
     private void createReservation() {
@@ -564,7 +564,7 @@ public class BookingFrame extends JFrame {
         try {
             resourceId = requireSelectedResource();
         } catch (IllegalArgumentException exception) {
-            showFeedback(exception.getMessage(), new Color(181, 77, 64));
+            showFeedback(exception.getMessage(), ERROR_COLOR);
             return;
         }
         String borrowerName = borrowerField.getText();
@@ -576,7 +576,7 @@ public class BookingFrame extends JFrame {
             refreshResources();
             loadReservations();
             showFeedback("Reservation created · " + reservation.getId(), TEAL);
-        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
+        }, exception -> showFeedback(messageOf(exception), ERROR_COLOR));
     }
 
     private void cancelReservation() {
@@ -590,9 +590,9 @@ public class BookingFrame extends JFrame {
             if (cancelled) {
                 showFeedback("Reservation " + reservationId + " cancelled.", TEAL);
             } else {
-                showFeedback("That reservation is no longer active.", new Color(181, 77, 64));
+                showFeedback("That reservation is no longer active.", ERROR_COLOR);
             }
-        }, exception -> showFeedback(messageOf(exception), new Color(181, 77, 64)));
+        }, exception -> showFeedback(messageOf(exception), ERROR_COLOR));
     }
 
     private void loadReservations() {
@@ -650,15 +650,15 @@ public class BookingFrame extends JFrame {
         String title = start ? "Choose start date and time" : "Choose end date and time";
         DateTimePickerDialog.choose(this, title, current).ifPresent(value -> {
             if (start && !value.isAfter(LocalDateTime.now())) {
-                showFeedback("Reservation start time must be in the future.", new Color(181, 77, 64));
+                showFeedback("Reservation start time must be in the future.", ERROR_COLOR);
                 return;
             }
             if (start && !endDateTime.isAfter(value)) {
-                showFeedback("Start time must be before the end time.", new Color(181, 77, 64));
+                showFeedback("Start time must be before the end time.", ERROR_COLOR);
                 return;
             }
             if (!start && !value.isAfter(startDateTime)) {
-                showFeedback("End time must be after the start time.", new Color(181, 77, 64));
+                showFeedback("End time must be after the start time.", ERROR_COLOR);
                 return;
             }
             if (start) {
@@ -697,7 +697,7 @@ public class BookingFrame extends JFrame {
         title.setFont(new Font("Segoe UI", Font.BOLD, 17));
         title.setForeground(INK);
         JLabel subtitle = new JLabel(subtitleText);
-        subtitle.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        subtitle.setFont(SMALL_FONT);
         subtitle.setForeground(MUTED);
         heading.add(title, BorderLayout.NORTH);
         heading.add(subtitle, BorderLayout.SOUTH);
@@ -713,7 +713,7 @@ public class BookingFrame extends JFrame {
     }
 
     private static void styleTable(JTable table) {
-        table.setFont(new Font("Segoe UI", Font.PLAIN, 12));
+        table.setFont(SMALL_FONT);
         table.setForeground(INK);
         table.setRowHeight(32);
         table.setShowVerticalLines(false);
@@ -721,7 +721,7 @@ public class BookingFrame extends JFrame {
         table.setSelectionBackground(new Color(220, 240, 238));
         table.setSelectionForeground(INK);
         table.setFillsViewportHeight(true);
-        table.getTableHeader().setFont(new Font("Segoe UI", Font.BOLD, 11));
+        table.getTableHeader().setFont(LABEL_FONT);
         table.getTableHeader().setForeground(MUTED);
         table.getTableHeader().setBackground(new Color(248, 250, 251));
         table.getTableHeader().setPreferredSize(new Dimension(100, 34));
@@ -739,7 +739,7 @@ public class BookingFrame extends JFrame {
 
     private static void addFormLabel(JPanel panel, GridBagConstraints constraints, int row, String text) {
         JLabel label = new JLabel(text);
-        label.setFont(new Font("Segoe UI", Font.BOLD, 11));
+        label.setFont(LABEL_FONT);
         label.setForeground(MUTED);
         constraints.gridy = row;
         constraints.insets = new Insets(row == 0 ? 0 : 5, 0, 2, 0);

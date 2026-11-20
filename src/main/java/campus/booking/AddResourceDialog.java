@@ -7,7 +7,6 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
-import java.awt.Font;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
@@ -38,7 +37,7 @@ final class AddResourceDialog extends JDialog {
             styleInput(field);
         }
         seatsField.setEnabled(false);
-        ComboBoxStyler.style(typeField, new Font("Segoe UI", Font.PLAIN, 13));
+        ComboBoxStyler.style(typeField, BODY_FONT);
         typeField.addActionListener(event -> {
             boolean hasSeats = ((ResourceType) typeField.getSelectedItem()).hasSeatingCapacity();
             seatsField.setEnabled(hasSeats);
@@ -135,7 +134,7 @@ final class AddResourceDialog extends JDialog {
     private static void addDialogField(JPanel panel, GridBagConstraints constraints,
                                        int row, String label, JComponent field) {
         JLabel caption = new JLabel(label);
-        caption.setFont(new Font("Segoe UI", Font.BOLD, 12));
+        caption.setFont(SMALL_BOLD_FONT);
         caption.setForeground(INK);
         constraints.gridy = row;
         constraints.gridx = 0;
