@@ -2,52 +2,22 @@ package campus.booking;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 
 public class BookingService {
     private final Object stateLock = new Object();
-    private final List<Resource> resources;
+    private final List<Resource> resources = new ArrayList<>();
     private final List<Reservation> reservations = new ArrayList<>();
     private final BookingRepository repository;
-    private int nextReservationNumber = 1;
 
-    public BookingService(List<Resource> resources) {
-        this(resources, List.of(), null);
-    }
-
-    public BookingService(List<Resource> resources, List<Reservation> reservations, BookingRepository repository) {
-        if (resources == null) {
-            throw new IllegalArgumentException("Resource list is required.");
-        }
-        if (reservations == null) {
-            throw new IllegalArgumentException("Reservation list is required.");
-        }
-        this.resources = new ArrayList<>(resources);
-        this.reservations.addAll(reservations);
+    public BookingService(BookingRepository repository) {
         this.repository = repository;
-        checkForDuplicateResourceIds();
-    }
-
-    private void checkForDuplicateResourceIds() {
-        Set<String> resourceIds = new HashSet<>();
-        for (Resource resource : resources) {
-            if (resource == null) {
-                throw new IllegalArgumentException("Resource list cannot contain null entries.");
-            }
-            String normalizedId = resource.getId().toLowerCase(Locale.ROOT);
-            if (!resourceIds.add(normalizedId)) {
-                throw new IllegalArgumentException("Duplicate resource ID: " + resource.getId());
-            }
-        }
+        refresh();
     }
 
     /** Reloads the display snapshot. Call from a background task, not the Swing event thread. */
     public void refresh() {
-        if (repository == null) return;
         List<Resource> loadedResources = repository.loadResources();
         List<Reservation> loadedReservations = repository.loadReservations();
         synchronized (stateLock) {
@@ -95,14 +65,6 @@ public class BookingService {
             throw new IllegalArgumentException("Only active resources can be added to the catalog.");
         }
         refresh();
-        if (repository == null) {
-            synchronized (stateLock) {
-                ensureNewResourceLocked(resource);
-                resources.add(resource);
-            }
-            return;
-        }
-
         synchronized (stateLock) {
             ensureNewResourceLocked(resource);
         }
@@ -115,20 +77,11 @@ public class BookingService {
     public void retireResource(String resourceId) {
         refresh();
         Resource resource;
-        LocalDateTime now = LocalDateTime.now();
         synchronized (stateLock) {
             resource = requireActiveResourceLocked(resourceId);
-            if (repository == null && hasActiveBookingLocked(resource, now)) {
-                throw new IllegalArgumentException(
-                        "This resource has a current or future booking and cannot be retired.");
-            }
-            if (repository == null) {
-                resource.retire();
-                return;
-            }
         }
 
-        if (!repository.retireResource(resource.getId(), now)) {
+        if (!repository.retireResource(resource.getId(), LocalDateTime.now())) {
             throw new IllegalArgumentException("This resource has a current or future booking and cannot be retired.");
         }
         synchronized (stateLock) {
@@ -153,14 +106,8 @@ public class BookingService {
         Resource resource;
         synchronized (stateLock) {
             resource = requireActiveResourceLocked(resourceId);
-            if (repository == null && !isAvailableLocked(resource, start, end)) {
+            if (!isAvailableLocked(resource, start, end)) {
                 throw new IllegalArgumentException("That resource is already reserved for an overlapping time.");
-            }
-            if (repository == null) {
-                String reservationId = nextReservationIdLocked();
-                Reservation reservation = new Reservation(reservationId, resource.getId(), borrowerName, start, end);
-                reservations.add(reservation);
-                return reservation;
             }
         }
 
@@ -190,7 +137,6 @@ public class BookingService {
                     .filter(item -> item.getId().equalsIgnoreCase(reservationId.trim()))
                     .findFirst().orElse(null);
             if (reservation == null) return false;
-            if (repository == null) return reservations.remove(reservation);
         }
         boolean cancelled = repository.cancelReservation(reservation.getId());
         synchronized (stateLock) {
@@ -198,22 +144,6 @@ public class BookingService {
             reservations.remove(reservation);
         }
         return cancelled;
-    }
-
-    private String nextReservationIdLocked() {
-        while (true) {
-            String candidate = String.format("R%04d", nextReservationNumber++);
-            boolean alreadyUsed = false;
-            for (Reservation existing : reservations) {
-                if (existing.getId().equalsIgnoreCase(candidate)) {
-                    alreadyUsed = true;
-                    break;
-                }
-            }
-            if (!alreadyUsed) {
-                return candidate;
-            }
-        }
     }
 
     private Optional<Resource> findResourceLocked(String resourceId) {
@@ -242,12 +172,6 @@ public class BookingService {
         return reservations.stream().noneMatch(existing ->
                 existing.getResourceId().equalsIgnoreCase(resource.getId())
                         && existing.overlaps(start, end));
-    }
-
-    private boolean hasActiveBookingLocked(Resource resource, LocalDateTime now) {
-        return reservations.stream().anyMatch(reservation ->
-                reservation.getResourceId().equalsIgnoreCase(resource.getId())
-                        && reservation.getEnd().isAfter(now));
     }
 
     private static void validateTimeRange(LocalDateTime start, LocalDateTime end) {
