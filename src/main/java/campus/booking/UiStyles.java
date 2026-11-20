@@ -1,12 +1,19 @@
 package campus.booking;
 
+import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JTable;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
+import javax.swing.table.DefaultTableCellRenderer;
 
 final class UiStyles {
     static final Color INK = new Color(37, 53, 66);
@@ -61,5 +68,65 @@ final class UiStyles {
         button.setHorizontalAlignment(SwingConstants.LEFT);
         button.setFocusPainted(false);
         button.setRolloverEnabled(false);
+    }
+
+    static void styleCard(JPanel panel) {
+        panel.setBackground(Color.WHITE);
+        panel.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(BORDER), BorderFactory.createEmptyBorder(18, 18, 18, 18)));
+    }
+
+    static JPanel sectionHeading(String titleText, String subtitleText) {
+        JPanel heading = new JPanel(new BorderLayout(0, 3));
+        heading.setOpaque(false);
+        JLabel title = new JLabel(titleText);
+        title.setFont(new Font("Segoe UI", Font.BOLD, 17));
+        title.setForeground(INK);
+        JLabel subtitle = new JLabel(subtitleText);
+        subtitle.setFont(SMALL_FONT);
+        subtitle.setForeground(MUTED);
+        heading.add(title, BorderLayout.NORTH);
+        heading.add(subtitle, BorderLayout.SOUTH);
+        return heading;
+    }
+
+    static JScrollPane tableScroll(JTable table) {
+        JScrollPane scroll = new JScrollPane(table);
+        scroll.setBorder(BorderFactory.createLineBorder(BORDER));
+        scroll.getViewport().setBackground(Color.WHITE);
+        ScrollBarStyler.style(scroll);
+        return scroll;
+    }
+
+    static void styleTable(JTable table) {
+        table.setFont(SMALL_FONT);
+        table.setForeground(INK);
+        table.setRowHeight(32);
+        table.setShowVerticalLines(false);
+        table.setGridColor(new Color(237, 241, 243));
+        table.setSelectionBackground(new Color(220, 240, 238));
+        table.setSelectionForeground(INK);
+        table.setFillsViewportHeight(true);
+        table.getTableHeader().setFont(LABEL_FONT);
+        table.getTableHeader().setForeground(MUTED);
+        table.getTableHeader().setBackground(new Color(248, 250, 251));
+        table.getTableHeader().setPreferredSize(new Dimension(100, 34));
+        table.setDefaultRenderer(Object.class, new DefaultTableCellRenderer() {
+            @Override
+            public Component getTableCellRendererComponent(JTable source, Object value, boolean selected,
+                    boolean focused, int row, int column) {
+                Component component = super.getTableCellRendererComponent(source, value, selected, focused, row, column);
+                setBorder(BorderFactory.createEmptyBorder(0, 9, 0, 9));
+                if (!selected) component.setBackground(row % 2 == 0 ? Color.WHITE : new Color(250, 252, 252));
+                return component;
+            }
+        });
+    }
+
+    static void setColumnWidths(JTable table, int... widths) {
+        table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+        for (int column = 0; column < widths.length && column < table.getColumnCount(); column++) {
+            table.getColumnModel().getColumn(column).setPreferredWidth(widths[column]);
+        }
     }
 }
